@@ -1,0 +1,3167 @@
+﻿<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>홀덤 연습장 (4인)</title>
+<link rel="icon" href="data:,">
+<style>
+
+  /* =====================================================================
+     홀덤 연습장 — 화면 스타일 (v3 · 포커 앱 룩)
+       · 배치는 그리드 → 자리·보드가 절대 겹치지 않는다
+       · 그 위에 만듦새(아바타 포드·칩 그래픽·조명·입체 버튼)를 얹는다
+       · 크기는 clamp()로 연속 변화 (브레이크포인트 중복 없음)
+     ===================================================================== */
+
+  *, *::before, *::after{margin:0;padding:0;box-sizing:border-box}
+
+  :root{
+    --line:#232c36; --line2:#2c3743;
+    --panel:#141a22; --panel2:#1b2430; --sunken:#0c1116;
+    --ink:#eef3f8; --ink2:#a4b1bf; --ink3:#7b8794;
+    --gold:#ffd270; --gold2:#e0a534;
+    --green:#3fc27c; --green2:#1f8a53;
+    --red:#ff8a7a;
+    --pad:clamp(6px,1.1vh,12px);
+  }
+
+  body{
+    font-family:'Segoe UI','Malgun Gothic',sans-serif;
+    background:radial-gradient(1300px 760px at 50% -6%, #1c2531 0%, #0d1219 56%, #06090d 100%);
+    color:var(--ink); height:100vh; height:100dvh; display:flex; overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  button{
+    background:linear-gradient(180deg,#2b3542,#1c242e); color:var(--ink);
+    border:1px solid var(--line2); border-radius:10px;
+    padding:clamp(7px,1.2vh,10px) clamp(11px,1.3vw,16px);
+    font-size:clamp(12.5px,1.8vh,14px); font-weight:700; cursor:pointer; font-family:inherit;
+    box-shadow:0 2px 6px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.07);
+  }
+  button:hover{background:linear-gradient(180deg,#35414f,#232c37)}
+  button:disabled{opacity:.4;cursor:default}
+
+  /* ───────── 가이드 서랍 ───────── */
+  #ref{
+    position:fixed; left:0; top:0; bottom:0; z-index:60;
+    width:min(720px,94vw); transform:translateX(-101%); transition:transform .22s ease;
+    background:var(--panel); border-right:1px solid var(--line);
+    overflow-y:auto; padding:16px 20px; font-size:13px; line-height:1.7; color:#c2ceda;
+    display:flex; gap:22px; align-items:flex-start; box-shadow:10px 0 40px rgba(0,0,0,.75);
+  }
+  #ref.open{transform:translateX(0)}
+  .refCol{flex:1;min-width:0}
+  #ref .rTitle{color:var(--gold);font-weight:800;margin:15px 0 6px;font-size:13px}
+  #ref .rTitle:first-child{margin-top:0}
+  #ref .rTitle + div:not(#equityVal), #ref .rTitle + ol{
+    background:#111820;border:1px solid var(--line);border-radius:10px;padding:10px 13px}
+  #ref ol{padding-left:26px}
+  #ref li{margin:2px 0}
+  #ref b{color:#e6eef6}
+  /* strong = 강조만 (b 와 달리 용어집 자동등록 대상이 아님) */
+  #ref strong{color:var(--gold);display:inline-block;margin-top:6px}
+  #ref strong:first-child{margin-top:0}
+  #ref b.refFlash{background:#2c4a38;border-radius:4px;box-shadow:0 0 0 3px #2c4a38}
+  #ref .rNote{color:var(--ink3);font-size:12px;margin-top:5px}
+  #equityVal{font-size:32px;font-weight:800;color:var(--green);line-height:1.1}
+  @media (max-width:780px){ #ref{flex-direction:column;gap:0} }
+
+  /* ───────── 게임 영역 ───────── */
+  #main{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden}
+
+  #topbar{
+    flex:none;height:clamp(44px,6.4vh,54px);display:flex;align-items:center;
+    gap:clamp(8px,1vw,14px);padding:0 clamp(10px,1.4vw,20px);
+    font-size:clamp(12px,1.7vh,13.5px);color:var(--ink2);flex-wrap:wrap;
+  }
+  #topbar b{color:var(--ink)}
+  #topbar .tag{color:var(--ink2)}
+  #refToggle,#sndToggle{padding:7px 12px;font-size:12.5px}
+  #sndGroup{display:flex;gap:13px;align-items:center}
+  #sndVol{accent-color:var(--gold2)}
+
+  /* 안내 배너 */
+  #msgRow{flex:none;display:flex;align-items:center;justify-content:center;
+          min-height:clamp(34px,5.6vh,52px);padding:2px 10px}
+  #msg{
+    font-size:clamp(13px,2vh,17px);font-weight:800;color:#e8eef5;
+    background:rgba(0,0,0,.45);border:1px solid var(--line2);
+    padding:clamp(4px,.8vh,8px) clamp(14px,2vw,26px);border-radius:999px;text-align:center;max-width:100%;
+  }
+  #msg:empty{display:none}
+  #msg.myturn{
+    color:#04220f;border:none;
+    background:linear-gradient(180deg,#54d98d,#2a9c60);
+    box-shadow:0 6px 24px rgba(63,194,124,.4), inset 0 1px 0 rgba(255,255,255,.4);
+    animation:myturnPulse 1.5s ease-in-out infinite;
+  }
+  @keyframes myturnPulse{
+    0%,100%{box-shadow:0 6px 20px rgba(63,194,124,.32), inset 0 1px 0 rgba(255,255,255,.4)}
+    50%    {box-shadow:0 6px 34px rgba(63,194,124,.62), inset 0 1px 0 rgba(255,255,255,.4)}
+  }
+
+  #tableWrap{flex:1;min-height:220px;position:relative;display:flex;
+             align-items:center;justify-content:center;padding:0 clamp(6px,1.4vw,22px)}
+
+  /* ───────── 테이블 (그리드 = 겹침 불가) ───────── */
+  #table{
+    position:relative;
+    width:min(100%,1120px,calc((100vh - 250px) * 1.75));
+    height:min(100%,600px);
+    border-radius:clamp(90px,26vh,240px)/clamp(60px,17vh,160px);
+    background:radial-gradient(120% 96% at 50% 24%,
+      #21855a 0%, #156a45 32%, #0e4e32 60%, #0a3a26 82%, #07291c 100%);
+    border:clamp(8px,1.6vh,14px) solid #171c22;
+    outline:1px solid #333d49;
+    box-shadow:inset 0 0 100px rgba(0,0,0,.55),
+               inset 0 8px 30px rgba(255,255,255,.08),
+               0 26px 70px rgba(0,0,0,.72);
+    display:grid;
+    grid-template-columns:minmax(0,1fr) minmax(0,1.5fr) minmax(0,1fr);
+    /* 위/아래 줄 높이를 미리 잡아둔다 — 액션 알약·배지가 생겼다 사라질 때 보드가 흔들리지 않게 */
+    grid-template-rows:minmax(clamp(64px,12vh,104px),auto) minmax(0,1fr) minmax(clamp(88px,16.5vh,146px),auto);
+    grid-template-areas:". top ." "left board right" ". me .";
+    align-items:center; justify-items:center;
+    padding:clamp(5px,1.1vh,12px) clamp(8px,2.4vw,34px);
+    gap:clamp(6px,1.6vh,18px) clamp(2px,.5vw,8px);   /* 행 간격을 넉넉히 → 보드와 자리가 붙지 않음 */
+    overflow:hidden;
+  }
+  /* 펠트 직조 질감 */
+  #table::after{
+    content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+    background-image:
+      repeating-linear-gradient(45deg, rgba(255,255,255,.014) 0 2px, transparent 2px 4px),
+      repeating-linear-gradient(-45deg, rgba(0,0,0,.02) 0 2px, transparent 2px 4px);
+  }
+
+  /* ───────── 보드 ───────── */
+  #boardArea{grid-area:board;display:flex;flex-direction:column;align-items:center;min-width:0;z-index:2}
+  #board{display:flex;gap:clamp(3px,.6vw,8px);justify-content:center}
+  .slotWrap{display:flex;flex-direction:column;align-items:center}
+  .slotLabel{font-size:clamp(8.5px,1.3vh,11px);color:rgba(210,235,215,.5);margin-top:3px}
+  #potLine{
+    margin-top:clamp(5px,1.1vh,11px);
+    font-size:clamp(13px,2.1vh,17px);font-weight:800;color:#fff;
+    font-variant-numeric:tabular-nums;white-space:nowrap;
+    background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.17);
+    border-radius:999px;padding:clamp(4px,.8vh,7px) clamp(11px,1.5vw,19px);
+    box-shadow:0 6px 18px rgba(0,0,0,.5);
+  }
+
+  /* ───────── 카드 ───────── */
+  .card{
+    position:relative;flex:none;
+    width:clamp(34px,7vh,64px);height:clamp(48px,9.9vh,90px);
+    border-radius:7px;background:linear-gradient(170deg,#ffffff,#eff2f6);color:#15181d;
+    display:grid;place-items:center;font-weight:800;
+    box-shadow:0 6px 16px rgba(0,0,0,.55), inset 0 0 0 1px rgba(0,0,0,.1);
+  }
+  .card .cidx{
+    position:absolute;top:4px;left:5px;line-height:1;text-align:center;font-weight:900;
+    font-size:clamp(9px,1.6vh,14px);
+  }
+  .card .cidx small{display:block;font-size:.8em;margin-top:1px}
+  .card .suit{font-size:clamp(17px,3.6vh,33px);opacity:.9;line-height:1}
+  .card.red{color:#d02a2a}
+  .card.back{
+    background:repeating-linear-gradient(45deg,#31518f,#31518f 4px,#274276 4px,#274276 8px);
+    border:1.5px solid #dfe6ef;color:transparent;
+  }
+  .card.hl{box-shadow:0 0 0 3px var(--gold), 0 0 20px rgba(255,210,112,.85);transform:translateY(-4px);z-index:4}
+  .card.slot{background:rgba(255,255,255,.045);border:1.5px dashed rgba(255,255,255,.2);
+             box-shadow:none;color:transparent}
+  .cardSm{width:clamp(26px,5.4vh,48px);height:clamp(37px,7.6vh,68px)}
+  .cardSm .cidx{font-size:clamp(8px,1.3vh,11px);top:3px;left:4px}
+  .cardSm .suit{font-size:clamp(13px,2.7vh,25px)}
+
+  /* ───────── 자리 ───────── */
+  .seat{
+    position:relative;min-width:0;max-width:100%;z-index:3;
+    display:flex;flex-direction:column;align-items:center;gap:clamp(1px,.35vh,4px);
+    transition:opacity .25s;
+  }
+  #seat2{grid-area:top}
+  #seat1{grid-area:left}
+  #seat3{grid-area:right}
+  #seat0{grid-area:me}
+  #seat0 .cards{order:-1}          /* 내 카드는 중앙 쪽(위)으로 */
+  #seat0.winner .rebuyInfo{display:none}
+  .seat.folded{opacity:.42}
+  .seat.folded .pod{filter:grayscale(1)}
+
+  /* 아바타 포드 */
+  .pod{
+    position:relative;flex:none;
+    width:clamp(26px,4.6vh,40px);height:clamp(26px,4.6vh,40px);border-radius:50%;
+    background:linear-gradient(160deg,#3c4a5b,#232c37);
+    display:grid;place-items:center;font-weight:800;color:#e9eff6;
+    font-size:clamp(13px,2.2vh,19px);
+    border:2px solid #4d5b6d;
+    box-shadow:0 6px 16px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.16);
+  }
+  #seat0 .pod{background:linear-gradient(160deg,#5f7189,#333f4f);border-color:#8fa2b8}
+  .seat.acting .pod{border-color:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.2),0 6px 18px rgba(0,0,0,.65)}
+  .seat.acting .pod::after{
+    content:'';position:absolute;inset:-7px;border-radius:50%;
+    background:conic-gradient(var(--green) 0 70%, rgba(255,255,255,.10) 70% 100%);
+    -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 3px),#000 0);
+            mask:radial-gradient(farthest-side,transparent calc(100% - 3px),#000 0);
+    animation:spin 9s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* 딜러 버튼 */
+  .dbtn{
+    position:absolute;right:-9px;bottom:-4px;
+    width:clamp(15px,2.6vh,22px);height:clamp(15px,2.6vh,22px);border-radius:50%;
+    background:radial-gradient(circle at 34% 30%,#fff,#d5d5d5);color:#1b1b1b;
+    font-size:clamp(9px,1.5vh,12px);font-weight:900;display:grid;place-items:center;
+    box-shadow:0 3px 8px rgba(0,0,0,.6);
+  }
+
+  /* 명찰 — 아바타를 안에 품은 가로형 (세로 높이 절약) */
+  .seat .box{
+    position:relative;max-width:100%;
+    display:flex;align-items:center;gap:clamp(5px,.7vw,9px);
+    background:rgba(3,9,7,.8);border:1px solid rgba(255,255,255,.15);
+    border-radius:12px;padding:clamp(3px,.55vh,6px) clamp(8px,1vw,12px);
+    box-shadow:0 5px 14px rgba(0,0,0,.5);
+  }
+  .binfo{min-width:0;text-align:left;line-height:1.25}
+  .seat .pstack em{font-style:normal;font-size:.72em;color:var(--red);margin-left:3px}
+  .seat.acting .box{border-color:rgba(255,255,255,.5)}
+  .seat.winner .box{border-color:var(--green);box-shadow:0 0 18px rgba(63,194,124,.5)}
+  .seat.folded .box{border-color:rgba(255,120,110,.3)}
+  .seat .pname,.seat .ptype,.seat .pstack,.seat .lastAct,
+  .seat .contribLine,.rebuyInfo{overflow:hidden;text-overflow:ellipsis;max-width:100%;white-space:nowrap}
+  .seat .pname{font-weight:800;font-size:clamp(11px,1.8vh,14px);line-height:1.3}
+  .seat .ptype{font-size:clamp(9px,1.4vh,11.5px);color:#8fa89a;line-height:1.3}
+  .seat .pstack{font-size:clamp(13px,2.2vh,17px);font-weight:800;color:var(--gold);
+                font-variant-numeric:tabular-nums;line-height:1.35}
+  .seat .contribLine{font-size:clamp(9px,1.4vh,11px);color:#93a89b;font-weight:700}
+  .seat .contribLine b{color:#cfe0d4;font-weight:800}
+  .seat .contribLine .nowBet{display:none;color:var(--green)}
+  .rebuyInfo{font-size:clamp(8.5px,1.3vh,11px);color:#8496a4;font-weight:700;
+             font-variant-numeric:tabular-nums}
+  .rebuyInfo .pl-p{color:var(--green);font-weight:800}
+  .rebuyInfo .pl-m{color:var(--red);font-weight:800}
+  .rebuyInfo .rbShort{display:none}
+  .seat:not(#seat0) .rbFull{display:none}
+  .seat:not(#seat0) .rbShort{display:inline}
+
+  /* 마지막 액션 */
+  .seat .lastAct{
+    font-size:clamp(9.5px,1.5vh,12px);font-weight:800;color:#cfe0d4;
+    background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.13);
+    border-radius:999px;padding:1px 9px;
+  }
+  .seat.winner .lastAct{color:var(--gold);border-color:rgba(255,210,112,.4)}
+  .seat .cards{display:flex;gap:clamp(2px,.4vw,5px);justify-content:center}
+
+  /* 배지 */
+  .seat .winBadge{
+    display:block;background:linear-gradient(180deg,#ffd76a,#e8a72e);color:#241a00;
+    font-weight:900;border-radius:999px;padding:2px 11px;font-size:clamp(10px,1.6vh,13px);
+    white-space:nowrap;box-shadow:0 0 18px rgba(255,213,79,.75);animation:winPop .3s ease-out;
+    margin-bottom:3px;
+  }
+  .seat .winBadge.returnBadge{background:linear-gradient(180deg,#4a5568,#2d3748);color:#e2e8f0;
+                              box-shadow:0 2px 8px rgba(0,0,0,.5)}
+  @keyframes winPop{0%{transform:scale(.5);opacity:0}100%{transform:scale(1);opacity:1}}
+  .foldStamp{
+    position:absolute;top:-9px;right:-9px;transform:rotate(12deg);
+    color:#ff7b6e;border:2px solid #ff7b6e;border-radius:6px;padding:0 6px;
+    font-weight:900;font-size:10px;letter-spacing:2px;background:rgba(30,0,0,.85);
+    pointer-events:none;z-index:5;
+  }
+  .seat .posBadge{display:none}   /* 딜러는 아바타의 D 버튼으로 표시 */
+
+  /* ───────── 칩 ───────── */
+  /* 액션 알약 + 칩을 한 줄로 (줄 수가 늘면 테이블 밖으로 잘림) */
+  .seatFoot{display:flex;align-items:center;justify-content:center;
+            gap:clamp(4px,.6vw,8px);flex-wrap:nowrap;max-width:100%}
+  .seat .betchip{display:flex;align-items:center;justify-content:center;flex:none}
+  .seat .betchip:empty{display:none}
+  /* 칩 겹침 폭은 반드시 '칩 크기' 기준으로. %를 쓰면 컨테이너 너비 기준이 되어 숫자를 덮는다 */
+  .chip{
+    --chipSize:clamp(15px,2.6vh,23px);
+    width:var(--chipSize);height:var(--chipSize);border-radius:50%;
+    margin-left:calc(var(--chipSize) * -0.5);position:relative;flex:none;
+    box-shadow:0 3px 8px rgba(0,0,0,.6), inset 0 -3px 6px rgba(0,0,0,.35),
+               inset 0 3px 5px rgba(255,255,255,.3);
+  }
+  .chip:first-child{margin-left:0}
+  .chip::after{content:'';position:absolute;inset:3px;border-radius:50%;
+               border:2px dashed rgba(255,255,255,.72)}
+  .chipAmt{
+    margin-left:7px;font-size:clamp(10px,1.6vh,13px);font-weight:800;color:#fff;
+    text-shadow:0 1px 4px #000;font-variant-numeric:tabular-nums;white-space:nowrap;
+  }
+  /* 팟이 승자에게 날아가는 칩 — 부드럽게 빨려들어가듯 */
+  .flyChip{
+    position:absolute;z-index:9;margin-left:0;pointer-events:none;
+    transition:transform .62s cubic-bezier(.32,.72,.35,1), opacity .62s ease-in;
+  }
+
+  /* ───────── 하단 컨트롤 ───────── */
+  /* 높이를 '고정'한다. 최소값만 주면 확정 바·레이즈 줄이 생길 때마다
+     높이가 변하고 그만큼 테이블이 위아래로 움직인다. */
+  #controls{
+    flex:none;padding:var(--pad) clamp(10px,1.4vw,20px) clamp(9px,1.4vh,16px);
+    display:flex;flex-direction:column;align-items:center;gap:clamp(5px,.9vh,9px);
+    height:clamp(142px,19.5vh,178px);justify-content:flex-start;overflow:hidden;
+  }
+  /* 줄바꿈으로 높이가 늘지 않게 — 좁으면 가로 스크롤 */
+  .ctlRow{display:flex;gap:clamp(5px,.7vw,9px);align-items:center;justify-content:center;
+          flex-wrap:nowrap;width:100%;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
+  .ctlRow::-webkit-scrollbar{display:none}
+  .ctlInfo{justify-content:flex-start;min-height:20px}
+  #turnHint{color:var(--gold);font-weight:800;font-size:clamp(11.5px,1.7vh,13.5px);flex-shrink:0}
+  #oddsHint{
+    font-size:clamp(11px,1.6vh,12.5px);color:var(--ink2);
+    background:rgba(255,255,255,.05);border:1px solid var(--line);
+    border-radius:999px;padding:5px 12px;font-variant-numeric:tabular-nums;
+  }
+  #oddsHint:empty{display:none}
+  /* 선행 분석 진행 표시 — 도는 중인지 준비됐는지 한눈에 */
+  #preState{font-size:clamp(11px,1.6vh,12.5px);font-weight:800;border-radius:999px;
+            padding:4px 11px;border:1px solid var(--line);white-space:nowrap}
+  #preState:empty{display:none}
+  #preState.work{color:#ffd270;border-color:rgba(255,210,112,.4);background:rgba(255,210,112,.10)}
+  #preState.ready{color:#7ee2a8;border-color:rgba(126,226,168,.45);background:rgba(126,226,168,.12)}
+  #preState.fail{color:var(--red);border-color:rgba(255,138,122,.4);background:rgba(255,138,122,.10)}
+  #oddsHint .good{color:#7ee2a8;font-weight:800}
+  #oddsHint .bad{color:var(--red);font-weight:800}
+  #btnReserveFold{margin-left:auto;font-size:12px;padding:6px 12px}
+  #btnReserveFold.on{background:linear-gradient(180deg,#a3453a,#7a2f27);border-color:#c0604f;color:#fff}
+
+  /* 주요 행동 버튼 — 입체 */
+  #btnFold{background:linear-gradient(180deg,#3a444f,#252c35);color:#dfe6ee;
+           padding:clamp(10px,1.8vh,15px) clamp(18px,2.4vw,30px);font-size:clamp(13px,2vh,15.5px)}
+  #btnCall{background:linear-gradient(180deg,#3fc27c,#1f8a53);color:#04220f;border-color:#2c9a60;
+           padding:clamp(10px,1.8vh,15px) clamp(18px,2.4vw,30px);font-size:clamp(13px,2vh,15.5px);
+           box-shadow:0 6px 20px rgba(63,194,124,.32), inset 0 1px 0 rgba(255,255,255,.34)}
+  #btnRaise{background:linear-gradient(180deg,#ffd270,#e0a534);color:#2a1c00;border-color:#e6b249;
+            padding:clamp(10px,1.8vh,15px) clamp(16px,2.2vw,26px);font-size:clamp(13px,2vh,15.5px);
+            box-shadow:0 6px 20px rgba(224,165,52,.3), inset 0 1px 0 rgba(255,255,255,.4)}
+  #btnNext{background:linear-gradient(180deg,#4a7ad6,#2b539c);border-color:#5183dd;color:#fff}
+  #btnReview,#btnThoughts,#btnSaveHand{background:linear-gradient(180deg,#2e3742,#1e252e)}
+
+  #raiseBox{
+    display:flex;flex-wrap:nowrap;gap:clamp(4px,.6vw,7px);align-items:center;max-width:100%;
+    background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:12px;padding:6px 9px;
+    overflow-x:auto;scrollbar-width:none;
+  }
+  #raiseBox::-webkit-scrollbar{display:none}
+  #raiseBox > *{flex:none}
+  #raiseSlider{width:clamp(80px,11vw,160px);accent-color:var(--gold2)}
+  #raiseAmt{
+    width:clamp(78px,8vw,104px);padding:clamp(8px,1.3vh,12px);border-radius:9px;
+    border:1px solid var(--line2);background:var(--sunken);color:var(--ink);
+    text-align:right;font-size:clamp(13px,1.9vh,15px);font-weight:800;font-family:inherit;
+  }
+  .preset,.nudge{padding:clamp(7px,1.2vh,10px) clamp(9px,1.1vw,13px);font-size:clamp(11.5px,1.7vh,13px);
+                 color:var(--ink2)}
+
+  /* 2단계 확정 */
+  #pendingBox{
+    display:none;align-items:center;gap:clamp(5px,.7vw,9px);max-width:100%;
+    background:rgba(255,210,112,.08);border:1px solid rgba(255,210,112,.3);
+    border-radius:12px;padding:9px 12px;
+  }
+  #pendingText{font-size:clamp(12px,1.8vh,13.5px);font-weight:800;color:var(--gold);white-space:nowrap}
+  #whyInput{
+    flex:1;min-width:150px;padding:clamp(8px,1.3vh,11px) 12px;border-radius:9px;
+    border:1px solid #3d3a2b;background:#0f1117;color:var(--ink);font-size:16px;font-family:inherit;
+  }
+  #whyInput::placeholder{color:var(--ink3)}
+  #btnConfirm{background:linear-gradient(180deg,#3fc27c,#1f8a53);color:#04220f;border-color:#2c9a60}
+  #btnRethink{background:linear-gradient(180deg,#7a4a30,#5a3522);color:#ffe0c8;border-color:#8a5638}
+
+  /* ───────── 코치 패널 ───────── */
+  #side{
+    width:clamp(320px,25vw,400px);flex:none;
+    background:linear-gradient(180deg,#141a22,#0f141b);border-left:1px solid var(--line);
+    display:flex;flex-direction:column;min-height:0;padding:13px;gap:8px;
+  }
+  #side h3{font-size:13.5px;font-weight:800;color:var(--ink);flex:none}
+  #chatHandle{display:none}
+  #chatSec{flex:1;display:flex;flex-direction:column;min-height:0;gap:8px}
+  #chatMsgs{flex:1;overflow-y:auto;min-height:0;display:flex;flex-direction:column;gap:9px;padding-right:2px}
+  .cmsg{border-radius:12px;padding:10px 13px;font-size:13.5px;line-height:1.78;
+        white-space:pre-wrap;word-break:break-word}
+  .cmsg.user{background:#212b37;color:#c9d5e2;align-self:flex-end;max-width:92%}
+  .cmsg.coach{background:linear-gradient(180deg,#18202a,#141b23);border:1px solid #26313d;
+              border-left:3px solid var(--green);color:#c9d5e2;animation:coachArrive .25s ease-out}
+  .cmsg.sys{background:#1c222b;color:#93a1b1;font-size:12.5px}
+  /* 게임이 즉시 계산해 내놓는 판정 — 코치 답변과 구분되게 */
+  .cmsg.local{background:#16202a;border:1px solid #2b4152;border-left:3px solid #4c9fd8;color:#cfe0ee}
+  @keyframes coachArrive{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .cmsg .verdict{display:block;font-weight:800;color:var(--gold);font-size:15.5px;
+                 margin-bottom:6px;padding-bottom:5px;border-bottom:1px dashed #3c4552}
+  .cmsg .term{text-decoration:none;border-bottom:1.5px dotted var(--green);color:#7ee2a8;cursor:help}
+  .cmsg .term:hover{background:rgba(63,194,124,.16)}
+
+  .oldChat{background:#12181f;border:1px solid var(--line);border-radius:9px;padding:5px 11px}
+  .oldChat summary{cursor:pointer;font-size:12px;color:var(--ink3);user-select:none}
+  .oldChat[open] summary{margin-bottom:7px}
+
+  #applyDock{display:none;flex:none}
+  #applyDock.on{display:block}
+  .applyRow{margin:2px 0 8px}
+  .applyBtn{
+    width:100%;background:linear-gradient(180deg,#3fc27c,#1f8a53);color:#04220f;
+    border:1px solid #2c9a60;border-radius:12px;padding:13px;font-size:14px;font-weight:800;
+    box-shadow:0 6px 18px rgba(63,194,124,.3), inset 0 1px 0 rgba(255,255,255,.3);
+  }
+  .applyBtn:disabled{opacity:.35}
+
+  #chatOpts{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12px;
+            color:var(--ink2);flex:none}
+  #coachModelSel{background:var(--sunken);color:var(--ink);border:1px solid var(--line2);
+                 border-radius:7px;padding:4px 7px;font-size:12px;font-family:inherit}
+  #chatInputRow{display:flex;gap:6px;flex:none}
+  #chatInput{flex:1;min-width:0;padding:11px;border-radius:10px;border:1px solid var(--line2);
+             background:var(--sunken);color:var(--ink);font-size:16px;font-family:inherit}
+  #chatInput::placeholder{color:var(--ink3)}
+  #btnChatSend{padding:11px 15px;font-size:13px}
+
+  /* 액션 로그 — 기본 접힘(채팅이 넓게 쓰도록), 호버/클릭으로 펼침 */
+  #logBox{flex:none;background:var(--sunken);border:1px solid var(--line);border-radius:11px;
+          padding:0 11px;overflow:hidden}
+  #logBox summary{
+    cursor:pointer;user-select:none;list-style:none;
+    font-size:12.5px;font-weight:800;color:var(--ink2);padding:9px 0;
+    display:flex;align-items:center;gap:8px;
+  }
+  #logBox summary::-webkit-details-marker{display:none}
+  #logBox summary::after{content:'▾';margin-left:auto;color:var(--ink3);font-size:11px}
+  #logBox[open] summary::after{content:'▴'}
+  #logBox summary:hover{color:var(--ink)}
+  #logBox summary .hint{font-weight:400;font-size:10.5px;color:var(--ink3)}
+  #logBox[open] summary .hint{display:none}
+  #logResize{flex:none;height:8px;cursor:row-resize;display:flex;align-items:center;justify-content:center}
+  #logResize::after{content:'';width:46px;height:3px;border-radius:2px;background:#2f3945}
+  #logResize:hover::after,#logResize.drag::after{background:var(--green)}
+  #log{
+    height:150px;overflow-y:auto;padding:2px 1px 10px;
+    font-size:12.5px;line-height:1.85;color:#98a6b4;
+  }
+  #log .me{color:var(--gold);font-weight:800}
+  #log .street{color:#dfe6ee;font-weight:800;margin-top:4px}
+  #log .win{color:#7ee2a8;font-weight:800}
+  #log .info{color:var(--ink3)}
+
+  #sideBtns{flex:none}
+  #toolsBox summary{cursor:pointer;font-size:12.5px;color:var(--ink2);user-select:none;padding:4px 0}
+  #toolsBox summary:hover{color:var(--ink)}
+  .toolBtns{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+  .toolBtns button{font-size:12px;padding:8px 11px}
+  #copyToast{font-size:12px;color:#7ee2a8;margin-top:5px}
+
+  /* ───────── 오버레이 ───────── */
+  #dim{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:55}
+  #dim.show{display:block}
+  #termPop{
+    display:none;position:fixed;z-index:90;max-width:min(420px,92vw);
+    background:#18202a;border:1px solid #33414f;border-radius:12px;padding:13px 15px;
+    font-size:13.5px;line-height:1.75;color:#d3dde7;box-shadow:0 14px 40px rgba(0,0,0,.8);
+  }
+  #termPop.show{display:block}
+  #termPop b{color:var(--gold)}
+  #termPop .closeHint{display:block;margin-top:9px;font-size:11.5px;color:var(--ink3)}
+
+  /* ───────── 반응형 (배치가 달라지는 것만) ───────── */
+  @media (max-width:1200px){ #side{width:clamp(290px,30vw,350px)} }
+
+  @media (max-width:950px){
+    body{flex-direction:column}
+    #main{flex:1;min-height:0}
+    #tableWrap{min-height:0}
+    #side{
+      position:fixed;left:0;right:0;bottom:0;z-index:70;width:100%;
+      height:80vh;height:80dvh;padding:0 12px 12px;
+      border-left:none;border-top:2px solid var(--line2);
+      box-shadow:0 -10px 34px rgba(0,0,0,.7);
+      transform:translateY(calc(100% - 46px));transition:transform .25s ease;
+    }
+    #side.open{transform:translateY(0)}
+    #chatHandle{display:flex;align-items:center;gap:8px;flex:none;height:46px;
+                font-size:13px;font-weight:800;color:var(--gold);cursor:pointer;user-select:none}
+    #chatHandle .prev{color:var(--ink3);font-weight:400;font-size:11.5px;
+                      overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+    #chatBadge{display:none;margin-left:auto;color:var(--red);font-size:11.5px}
+    #chatBadge.show{display:inline}
+    #chatArrow{margin-left:auto;color:var(--ink3)}
+    #chatBadge.show + #chatArrow{margin-left:8px}
+    #log{height:108px}
+    #controls{margin-bottom:46px}
+    #raiseSlider{display:none}
+    #raiseBox{width:100%;justify-content:center}
+    #raiseAmt{width:96px}
+    /* 좁은 화면은 확정 바가 두 줄이 되므로 컨트롤 높이를 그만큼 더 고정 */
+    #controls{height:clamp(150px,23vh,196px)}
+    #pendingBox{flex-wrap:wrap;overflow:visible}
+    #pendingText{flex:1 1 100%}
+    #whyInput{flex:1 1 100%;min-width:0}
+    #btnWhySend,#btnConfirm,#btnRethink{flex:1}
+  }
+
+  @media (max-width:620px){
+    #topbar{font-size:11.5px;gap:7px}
+    #topbar span.tag:nth-of-type(3),#topbar span.tag:nth-of-type(4){display:none}
+    #sndToggle{display:inline-block}
+    #sndGroup{
+      display:none;position:fixed;top:46px;left:8px;z-index:80;
+      background:#1b222b;border:1px solid var(--line2);border-radius:10px;
+      padding:12px 14px;flex-direction:column;align-items:flex-start;gap:10px;
+      box-shadow:0 6px 20px rgba(0,0,0,.7);
+    }
+    #sndGroup.open{display:flex}
+    #sndVol{width:70px !important}
+    #table{padding:5px 7px;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr) minmax(0,1fr)}
+    .seat .ptype{display:none}
+    .seat .betchip{display:none}
+    .seat .contribLine .nowBet{display:inline}
+    .slotLabel{display:none}
+    #controls{padding:7px 8px}
+  }
+
+</style>
+</head>
+<body>
+
+<div id="dim"></div>
+<div id="termPop"></div>
+
+<div id="ref">
+<div class="refCol">
+  <div class="rTitle">📈 내 승률 (추정)</div>
+  <div id="equityVal">—</div>
+  <div id="handTier" style="font-size:12.5px; color:#ffd54f; font-weight:700; margin-top:2px;"></div>
+  <div class="rNote" id="equityNote">내 카드 + 공개된 카드 기준, 상대가 무작위 핸드라고 가정한 시뮬레이션 추정치</div>
+
+  <div class="rTitle">🂡 시작 핸드 등급 (처음 2장)</div>
+  <div>
+    · <b>최상</b>: AA &gt; KK &gt; QQ, AK(같은 무늬) — 무조건 레이즈<br>
+    · <b>상</b>: JJ, TT, AK, AQ — 레이즈해도 좋음<br>
+    · <b>중</b>: 99~66, AJ, KQ, 같은 무늬 연속(9♠8♠) — 싸면 볼만함<br>
+    · <b>하</b>: 나머지 — 공짜 아니면 폴드. 최악은 7-2 (무늬 다름)
+  </div>
+
+  <div class="rTitle">✅ 참여 기준 (초보용 규칙)</div>
+  <div>
+    아래 셋 중 하나에 해당하면 참여, 아니면 폴드:<br>
+    ① <b>66 이상 페어</b><br>
+    ② <b>둘 다 10 이상</b> (예: Q♥ J♣)<br>
+    ③ <b>A + 같은 무늬</b> (예: A♠ 7♠)<br>
+    ⚠️ A만 있고 옆 카드가 낮으면(A-3 등) 함정 — 둘 다 A일 때 옆 카드(키커) 싸움에서 짐
+  </div>
+
+  <div class="rTitle">🎯 자리별 시작 패 기준 (4인 기준)</div>
+  <div>
+    <strong>이 표는 "내 앞에서 아무도 안 올렸을 때" 기준.</strong> 누가 이미 올렸으면 맨 아래 항목을 따른다.<br>
+    <strong>❶ 딜러(<b>BTN</b>) — 제일 좋은 자리, 제일 넓게 (10판 중 5판쯤 참여)</strong><br>
+    · 페어: 2·2부터 A·A까지 전부<br>
+    · A: 옆 카드 무엇이든 전부<br>
+    · K: 옆 카드 5 이상이면 오픈 / 무늬 같으면 전부<br>
+    · Q: 옆 카드 8 이상 / 무늬 같으면 4 이상<br>
+    · J: 옆 카드 8 이상 / 무늬 같으면 6 이상<br>
+    · 10: 옆 카드 8 이상 / 무늬 같으면 6 이상<br>
+    · 9 이하만 있을 때: 무늬 같고 숫자 차 2 이내(9♠7♠ 등), 또는 무늬 달라도 바로 붙은 8·7 이상<br>
+    <strong>❷ 작은 블라인드(<b>SB</b>) — 상대 1명, 넓게 열되 콜은 금지 (10판 중 4판쯤)</strong><br>
+    · 콜로 따라가지 말 것 — 레이즈 아니면 폴드<br>
+    · 페어 전부 / A 전부<br>
+    · K: 옆 카드 7 이상 / 무늬 같으면 전부<br>
+    · Q: 옆 카드 9 이상 / 무늬 같으면 5 이상<br>
+    · J: 옆 카드 9 이상 / 무늬 같으면 7 이상<br>
+    · 10: 무늬 같으면 7 이상 / 무늬 다르면 10·9만<br>
+    · 9 이하: 무늬 같고 바로 붙은 것만<br>
+    <strong>❸ 큰 블라인드(<b>BB</b>) — "오픈"이 없는 자리</strong><br>
+    · 앞이 다 접으면 이미 이긴 판이다. 열 필요 자체가 없음<br>
+    · 남이 올렸을 때 <strong>지킬지</strong> 정하는 자리<br>
+    · 콜해도 되는 패: 페어 전부, A 전부, K 전부, Q+7 이상, J+8 이상, 무늬 같고 붙은 두 장<br>
+    · 되올릴 패: A·A, K·K, Q·Q, J·J, A+K<br>
+    · 올린 사람이 예송(고수)이면 한 칸씩 좁게<br>
+    <strong>❹ 제일 먼저 말하는 자리(<b>UTG</b>) — 뒤에 3명, 제일 좁게 (10판 중 2판쯤)</strong><br>
+    · 페어: 전부 (단 2·2~5·5는 싸게 볼 수 있을 때만)<br>
+    · A: 옆 카드 9 이상 / 무늬 같으면 전부<br>
+    · K: 옆 카드 10 이상 / 무늬 같으면 9 이상<br>
+    · Q: 옆 카드 10 이상 / 무늬 같으면 9 이상<br>
+    · J: 10과 함께일 때 / 무늬 같으면 9 이상<br>
+    · 그 외: 무늬 같고 바로 붙은 7·6 이상만<br>
+    <strong>❺ 누가 이미 올렸을 때 (자리 무관)</strong><br>
+    · 되올리기: A·A, K·K, Q·Q, A+K<br>
+    · 콜만: J·J, 10·10, 9·9, A+Q, 무늬 같은 A+J<br>
+    · 나머지는 전부 폴드 — 위 표는 <strong>아무도 안 올렸을 때만</strong> 쓴다
+  </div>
+
+  <div class="rTitle">🃏 족보 (높은 순)</div>
+  <ol>
+    <li><b>스트레이트 플러시</b> — 같은 무늬 연속 5장</li>
+    <li><b>포카드</b> — 같은 숫자 4장</li>
+    <li><b>풀하우스</b> — 트리플 + 원페어</li>
+    <li><b>플러시</b> — 같은 무늬 5장</li>
+    <li><b>스트레이트</b> — 숫자 연속 5장</li>
+    <li><b>트리플</b> — 같은 숫자 3장</li>
+    <li><b>투페어</b> — 페어 2개</li>
+    <li><b>원페어</b> — 같은 숫자 2장</li>
+    <li><b>하이카드</b> — 아무것도 없음</li>
+  </ol>
+
+  <div class="rTitle">⏱ 게임 진행 순서</div>
+  <div>
+    ① <b>프리플랍</b>: 각자 2장 받고 베팅<br>
+    ② <b>플랍</b>: 공유카드 3장 공개 → 베팅<br>
+    ③ <b>턴</b>: 4번째 공유카드 → 베팅<br>
+    ④ <b>리버</b>: 5번째 공유카드 → 베팅<br>
+    ⑤ <b>쇼다운</b>: 패 공개. 내 2장 + 공유 5장 중 <b>최강 5장 조합</b>으로 승부
+  </div>
+
+  <div class="rTitle">💰 레이즈 크기 가이드</div>
+  <div>
+    · 프리플랍 첫 레이즈: <b>500~600</b> (강제 베팅 200의 2.5~3배)<br>
+    · 플랍 이후 베팅: <b>팟에 쌓인 돈의 50~75%</b><br>
+    · 상대 벳에 레이즈: <b>그 벳의 2.5~3배</b><br>
+    · 어중간한 금액은 정보만 주고 얻는 게 없음
+  </div>
+
+  <div class="rTitle">🎲 자주 쓰는 통계 확률</div>
+  <div>
+    · <b>아웃츠 공식</b>: 내게 필요한 남은 카드 장수 × 4 = 플랍 시점 완성 확률(%), 턴 시점엔 × 2<br>
+    · 플러시 드로우(9장 남음) → 리버까지 완성 <b>약 35%</b><br>
+    · 양쪽 스트레이트 드로우(8장) → <b>약 32%</b><br>
+    · 포켓페어(처음 2장이 같은 숫자) → 플랍에서 트리플 <b>약 12%</b><br>
+    · AA로 4인전 승률 <b>약 64%</b>, 아무 패어나 랜덤이면 25%
+  </div>
+</div>
+
+<div class="refCol">
+  <div class="rTitle">🪑 자리 이름 약어 (코치·로그에서 사용)</div>
+  <div>
+    <b>SB</b> (스몰 블라인드): 딜러 다음 자리. 100을 강제로 냄<br>
+    <b>BB</b> (빅 블라인드): 그다음 자리. 200을 강제로 냄<br>
+    <b>UTG</b> (언더 더 건): 블라인드 다음 자리. 프리플랍에서 <b>첫 번째로 행동</b>해야 해서 가장 압박받는 자리<br>
+    <b>BTN / 버튼</b>: 딜러 자리. 항상 마지막에 행동 = 최고 자리
+  </div>
+
+  <div class="rTitle">🧠 알아두면 좋은 개념</div>
+  <div>
+    <b>스몰/빅 블라인드</b>: 강제 베팅 두 개의 이름. 딜러 다음 사람이 내는 100이 스몰 블라인드, 그다음 사람이 내는 200이 <b>빅블라인드(BB)</b>. 포커에서 금액을 말할 때 기준 단위로 써서 "3BB 레이즈" = 600<br>
+    <b>행동 순서</b>: 프리플랍은 블라인드 두 명을 건너뛴 사람부터 → 딜러 → 100 낸 사람 → 200 낸 사람. 플랍부터는 100 낸 사람부터 시작, <b>딜러가 항상 마지막(가장 유리)</b><br>
+    <b>내 앞이 전부 폴드</b>: 나보다 먼저 행동한 사람들이 다 접었다 = 남은 상대는 강제로 돈 낸 블라인드 두 명뿐(랜덤 패)<br>
+    <b>스틸</b>: 위 상황에서 깔린 블라인드 300을 노리고 패와 상관없이 레이즈해서 다 접게 만드는 것<br>
+    <b>페어</b>: 같은 숫자 2장. 어떻게 만들었냐에 따라 급이 갈림 — 내 손 2장이 이미 페어면 <b>포켓페어</b>, 내 카드 1장이 공유카드와 맞으면 "맞춘 페어". 공유카드 중 <b>가장 높은 숫자</b>와 맞으면 <b>탑페어</b>(꽤 강함), 중간·바닥 숫자와 맞으면 <b>미들·바텀 페어</b>(약해서 큰 베팅 못 버팀). 내 포켓페어가 공유카드 전부보다 높으면 <b>오버페어</b> — 탑페어보다도 강함 (예: 보드 Q72에 내 KK)<br>
+    <b>키커</b>: 같은 페어끼리 붙으면 옆 카드로 승부. A-3의 3이 약한 키커<br>
+    <b>드로우</b>: 아직 미완성인 패. 플러시까지 1장 남은 상태 = 플러시 드로우<br>
+    <b>아웃츠</b>: 내 패를 완성시켜줄 남은 카드 장수<br>
+    <b>3벳 / 4벳</b>: 베팅 횟수 세는 말. 블라인드가 1벳, 첫 레이즈가 2벳, 거기에 되받아치는 리레이즈가 <b>3벳</b>, 또 올리면 <b>4벳</b>. 숫자가 커질수록 강한 패 신호 — 4벳은 보통 QQ 이상이나 AK급 (또는 대담한 블러프)<br>
+    <b>밸류벳</b>: 이기고 있을 때 더 뜯어내려는 베팅 / <b>블러프</b>: 지고 있는데 접게 하려는 베팅<br>
+    <b>포지션 있다/없다</b>: 상대보다 늦게 행동하면 "포지션 있다"(유리). 블라인드 자리는 플랍부터 먼저 행동 = 포지션 없음<br>
+    <b>OOP / IP</b>: 위치의 영어 약어. <b>OOP</b>(아웃 오브 포지션)=먼저 행동해야 하는 불리한 쪽, <b>IP</b>(인 포지션)=나중에 행동하는 유리한 쪽<br>
+    <b>마른 보드</b>: 공유카드가 서로 연관 없어 드로우가 안 나오는 판 (예: K♠7♦2♣). 반대는 젖은 보드<br>
+    <b>에어</b>: 아무것도 못 맞춘 패 (페어도 드로우도 없음). 에어로 하는 베팅 = 순수 블러프<br>
+    <b>폴드 에퀴티</b>: 상대가 접어줄 가능성 자체가 주는 이득. 블러프의 수익은 전부 여기서 나옴<br>
+    <b>백도어 드로우</b>: 남은 카드 2장이 연달아 맞아야 완성되는 아주 약한 드로우. 없는 것보단 낫다는 보험 수준<br>
+    <b>오픈</b>: 그 판의 첫 레이즈 / <b>림프</b>: 레이즈 없이 200만 콜로 슬쩍 참여 (소극적이라 보통 비추)<br>
+    <b>콜드콜</b>: 내 돈이 하나도 안 들어간 상태에서 남의 레이즈를 그냥 콜. 애매한 플레이라 자주 지적받음<br>
+    <b>도미네이트</b>: 같은 카드를 들었는데 옆 카드에서 밀리는 상태. 내 A-4 vs 상대 A-K → 내가 도미네이트 당함<br>
+    <b>씨벳(C벳)</b>: 프리플랍에서 레이즈한 사람이 플랍에서도 이어서 베팅하는 것. 주도권 유지용<br>
+    <b>체크레이즈</b>: 일부러 체크했다가 상대가 벳하면 레이즈로 되받아치기. 강한 패로 파는 함정<br>
+    <b>레인지</b>: 상대가 들고 있을 만한 패 후보들의 묶음. "레인지가 넓다" = 약한 패로도 그 행동을 한다<br>
+    <b>팟 오즈</b>: 콜 비용 대비 팟 크기의 비율. 콜 500에 팟 2,000이면 5번 중 1번만 이겨도 본전<br>
+    <b>에퀴티</b>: 내 승률. 왼쪽의 "내 승률" 숫자가 바로 이것. 단, "베팅 없이 끝까지 공짜로 깠을 때" 기준의 이론값<br>
+    <b>에퀴티 실현</b>: 그 승률을 실제로 못 써먹는 문제. 약한 패(예: 4-3)는 맞아도 바닥 페어라 <b>이후 베팅을 못 버티고 접게 됨</b> → 표시된 승률보다 낮게 봐야. "에퀴티 없는 콜"이 이 얘기<br>
+    <b>넛츠</b>: 그 시점에 나올 수 있는 최강의 패<br>
+    <b>헤즈업(헤드업)</b>: 1:1 승부. 이길 상대가 하나뿐이라 <b>핸드 가치가 확 오른다</b> — 4명 판에선 쓰레기인 J2도 헤즈업(특히 블라인드끼리 싸움)에선 하이카드 하나로도 자주 이겨서 충분히 싸울 만함. 페어 하나·하이카드 승부가 흔해짐<br>
+    <b>멀티웨이</b>: 3명 이상이 참여한 팟. 누군가는 맞을 확률이 높아 블러프가 잘 안 통하고, 강한 패 기준도 올라감<br>
+    <b>숏스택</b>: 칩이 얼마 안 남은 상태 / <b>틸트</b>: 잃은 뒤 감정적으로 무리하게 치는 상태<br>
+    <b>스택</b>: 내가 지금 갖고 있는 칩 전체 금액<br>
+    <b>루즈-어그레시브(LAG)</b>: 많은 핸드에 참여(루즈)하고 베팅도 세게(어그레시브) 하는 스타일. 병송이 이 타입. 반대는 <b>타이트-패시브</b>(적게 참여, 콜 위주)<br>
+    <b>수티드(수트)</b>: 내 카드 2장이 같은 무늬인 것. 플러시·플러시 드로우 가능성이 생겨 같은 숫자 조합보다 <b>승률이 2~3%p 올라감</b>. 단, 보너스일 뿐이라 약한 카드가 수트라고 갑자기 좋은 핸드가 되진 않음<br>
+    <b>45s / A7o 표기</b>: 뒤의 s는 같은 무늬(suited), o는 다른 무늬(offsuit). 45s = 4와 5가 같은 무늬<br>
+    <b>스펙큘레이티브 핸드</b>: 지금은 약하지만 맞으면 대박인 패 (작은 페어, 45s 같은 무늬 연속). 싸게 보고 크게 먹는 용도 — 비싸게 따라가면 안 됨<br>
+    <b>임플라이드 오즈</b>: 지금 팟만이 아니라 <b>"패가 맞았을 때 앞으로 더 딸 수 있는 돈"</b>까지 계산에 넣는 것. 스펙큘레이티브 핸드로 콜하는 근거 — 상대 스택이 깊을수록 커짐<br>
+    <b>사이드팟</b>: 올인 금액이 서로 다를 때 팟이 여러 개로 쪼개지는 것. 올인한 사람은 <b>"자기가 낸 만큼"이 걸린 팟</b>까지만 딸 수 있고, 그 위로 더 지른 큰돈은 돈 많은 사람들끼리만 다툰다<br>
+    <b>미콜 베팅 반환</b>: 내가 상대보다 많이 올인하면, <b>상대 스택을 넘어선 초과분은 아무도 콜할 수 없어</b> 나에게 그대로 돌아온다(거스름돈). 승패와 무관 — 상대가 나보다 가난하면 "내 돈 전부"가 아니라 <b>"상대가 커버한 만큼"만</b> 걸린다
+  </div>
+</div>
+
+</div>
+
+<div id="main">
+  <div id="topbar">
+    <span>🃏 <b>홀덤 연습장1</b></span>
+    <span class="tag" id="handInfo">핸드 #1</span>
+    <span class="tag">블라인드 100 / 200</span>
+    <span class="tag">시작 스택 10,000원 (파산 시 자동 리바이)</span>
+    <button id="sndToggle">🔊</button>
+    <span id="sndGroup">
+      <label class="tag" style="cursor:pointer;"><input type="checkbox" id="sndOn" checked> 🔊 효과음</label>
+      <label class="tag" style="cursor:pointer;">음량 <input type="range" id="sndVol" min="0" max="4" step="0.1" value="2.2" style="width:110px; vertical-align:middle; accent-color:#c9a13b;" title="효과음·음성 음량"></label>
+      <label class="tag" style="cursor:pointer;"><input type="checkbox" id="voiceOn" checked> 🗣 음성(콜·폴드 읽기)</label>
+    </span>
+    <label class="tag" style="cursor:pointer;"><input type="checkbox" id="profileOn"> 📝 데이터 기록</label>
+    <button id="refToggle">📚 가이드</button>
+  </div>
+
+  <!-- 안내 배너: 테이블 밖에 절대배치하면 화면이 납작할 때 잘리므로 정상 흐름의 한 줄로 -->
+  <div id="msgRow"><div id="msg"></div></div>
+
+  <div id="tableWrap">
+    <div id="table">
+      <div id="boardArea">
+        <div id="board"></div>
+        <div id="potLine">팟: 0</div>
+      </div>
+      <div class="seat" id="seat1"></div>
+      <div class="seat" id="seat2"></div>
+      <div class="seat" id="seat3"></div>
+      <div class="seat" id="seat0"></div>
+    </div>
+  </div>
+
+  <div id="controls">
+    <div class="ctlRow ctlInfo">
+      <span id="turnHint"></span>
+      <span id="oddsHint"></span>
+      <span id="preState"></span>
+      <button id="btnReserveFold" style="display:none">🚫 폴드 예약</button>
+    </div>
+    <div class="ctlRow ctlMain">
+      <button id="btnFold">폴드</button>
+      <button id="btnCall">콜</button>
+    </div>
+    <div class="ctlRow" id="raiseBox">
+      <button class="preset" data-p="min">최소</button>
+      <button class="preset" data-p="half">½팟</button>
+      <button class="preset" data-p="pot">팟</button>
+      <button class="preset" data-p="allin">올인</button>
+      <input type="range" id="raiseSlider">
+      <button class="nudge" id="btnMinus">−100</button>
+      <input type="number" id="raiseAmt" step="100">
+      <button class="nudge" id="btnPlus">+100</button>
+      <button id="btnRaise">레이즈</button>
+    </div>
+    <div class="ctlRow" id="pendingBox">
+      <span id="pendingText"></span>
+      <input type="text" id="whyInput" placeholder="이 선택의 이유 (빈 값도 OK)">
+      <button id="btnWhySend">🎓 코치평가</button>
+      <button id="btnConfirm">✅ 확정</button>
+      <button id="btnRethink">↩ 다시 선택</button>
+    </div>
+    <div class="ctlRow ctlEnd">
+      <button id="btnNext">다음 핸드 ▶</button>
+      <button id="btnReview">📋 이번 핸드 리뷰</button>
+      <button id="btnThoughts">🧠 봇 속마음</button>
+      <button id="btnSaveHand">💾 이번 판 기록</button>
+    </div>
+  </div>
+</div>
+
+<div id="side">
+  <div id="chatHandle">
+    💬 코치
+    <span class="prev" id="chatPreview">탭해서 채팅 열기</span>
+    <span id="chatBadge">● 새 답변</span>
+    <span id="chatArrow">▲</span>
+  </div>
+  <div id="chatSec">
+    <h3>🎓 Claude 코치 <span id="coachState" style="font-size:11px;font-weight:normal;color:#888;">(서버 확인 중...)</span></h3>
+    <div id="chatMsgs"></div>
+    <div id="applyDock"></div>
+    <div id="chatOpts">
+      <label><input type="checkbox" id="attachState" checked> 상황 자동 첨부</label>
+      <label><input type="checkbox" id="confirmMode" checked> 결정 전 코치와 자동 상의</label>
+      <label>코치:
+        <select id="coachModelSel">
+          <option value="claude-haiku-4-5">⚡ 빠름 (Haiku)</option>
+          <option value="claude-sonnet-5" selected>🎯 정밀 (Sonnet)</option>
+        </select>
+      </label>
+    </div>
+    <div id="chatInputRow">
+      <input type="text" id="chatInput" placeholder="💬 코치에게 자유 질문 (언제든지 — 예: 병송이 왜 올인했어?)">
+      <button id="btnChatSend">전송</button>
+    </div>
+  </div>
+
+  <!-- 액션 로그: 기본 접힘. 마우스만 올려도 펼쳐지고, 클릭하면 고정된다 -->
+  <details id="logBox">
+    <summary>📜 액션 로그 <span class="hint">클릭해서 펼치기</span></summary>
+    <div id="logResize" title="드래그해서 로그 높이 조절"></div>
+    <div id="log"></div>
+  </details>
+
+  <div id="sideBtns">
+    <details id="toolsBox">
+      <summary>🧰 도구 (코칭 노트 · 상황 복사)</summary>
+      <div class="toolBtns">
+        <button id="btnProfile">📒 코칭 노트 보기</button>
+        <button id="btnProfileUpd">✍ 노트 지금 갱신</button>
+        <button id="btnCopyNow">📋 상황 복사</button>
+      </div>
+      <div id="copyToast"></div>
+    </details>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* ================= 효과음 (Web Audio 합성, 파일 불필요) ================= */
+let audioCtx = null, masterGain = null, userInteracted = false;
+function ac(){
+  if(!audioCtx){
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = volGain();
+    masterGain.connect(audioCtx.destination);
+  }
+  if(audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+function sndOut(){ ac(); return masterGain; }
+function sndVolValue(){
+  const s = document.getElementById('sndVol');
+  return s ? +s.value : 2;
+}
+// 슬라이더(0~4)를 0~1로 정규화
+function volNorm(){ return Math.min(1, Math.max(0, sndVolValue()/4)); }
+// 효과음 마스터 게인: 사람 귀에 맞게 제곱(로그 감각) 스케일, 최대 ~3.6배
+function volGain(){ const n = volNorm(); return n*n*3.6; }
+function sndEnabled(){
+  const cb = document.getElementById('sndOn');
+  // 브라우저 정책상 첫 클릭 전에는 오디오 생성 불가 — 경고 방지를 위해 조용히 생략
+  if(!audioCtx && !userInteracted) return false;
+  return cb && cb.checked;
+}
+// 행동 음성 안내 (브라우저 내장 한국어 TTS)
+let koVoice = null;
+function findKoVoice(){
+  try{
+    const vs = speechSynthesis.getVoices();
+    koVoice = vs.find(v=>v.lang && v.lang.toLowerCase().startsWith('ko') && v.localService)
+           || vs.find(v=>v.lang && v.lang.toLowerCase().startsWith('ko'))
+           || null;
+  }catch(e){}
+}
+if('speechSynthesis' in window){
+  findKoVoice();
+  speechSynthesis.onvoiceschanged = findKoVoice;
+}
+let lastUtter = null;   // Chrome GC 버그 방지용 참조 유지
+function speakBrowser(text){
+  if(!('speechSynthesis' in window)) return false;
+  try{
+    speechSynthesis.resume();
+    if(!koVoice) findKoVoice();
+    const u = new SpeechSynthesisUtterance(text);
+    lastUtter = u;
+    if(koVoice) u.voice = koVoice;
+    u.lang = 'ko-KR';
+    u.rate = 1.15;
+    u.volume = Math.pow(volNorm(), 1.4);   // 음량 슬라이더 연동 (로그 감각)
+    speechSynthesis.cancel();
+    setTimeout(()=>{ try{ speechSynthesis.resume(); speechSynthesis.speak(u); }catch(e){} }, 60);
+    return true;
+  }catch(e){ return false; }
+}
+function speak(text){
+  const v = document.getElementById('voiceOn');
+  if(!v || !v.checked) return;
+  const isLocalPC = (location.hostname === 'localhost' || location.hostname === '127.0.0.1' || !location.hostname);
+  if(isLocalPC){
+    // PC에서 플레이: 서버의 Windows 음성(확실함) 우선, 서버 꺼지면 브라우저 TTS
+    if(typeof coachOnline !== 'undefined' && coachOnline){
+      fetch(COACH_URL + '/say', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({text, vol: Math.round(Math.pow(volNorm(), 1.4)*100)}),
+      }).catch(()=>{});
+      return;
+    }
+    speakBrowser(text);
+  } else {
+    // 모바일 등 원격 접속: 그 기기의 브라우저 TTS로 발화 (폰 스피커에서 남)
+    if(!speakBrowser(text) && typeof coachOnline !== 'undefined' && coachOnline){
+      fetch(COACH_URL + '/say', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({text, vol: Math.round(Math.pow(volNorm(), 1.4)*100)}),
+      }).catch(()=>{});
+    }
+  }
+}
+// 칩 한 개가 '짤깍' 부딪히는 소리
+function chipClack(t, vol){
+  const c = ac();
+  const len = Math.floor(c.sampleRate * 0.045);
+  const buf = c.createBuffer(1, len, c.sampleRate);
+  const d = buf.getChannelData(0);
+  for(let i=0;i<len;i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/len, 2.2);
+  const src = c.createBufferSource(); src.buffer = buf;
+  const bp = c.createBiquadFilter();
+  bp.type='bandpass'; bp.frequency.value = 3200 + Math.random()*2500; bp.Q.value = 2;
+  const g = c.createGain();
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+  src.connect(bp); bp.connect(g); g.connect(sndOut());
+  src.start(t);
+}
+// 칩 여러 개 (금액 클수록 많이)
+function sndChips(n, vol){
+  if(!sndEnabled()) return;
+  try{
+    const now = ac().currentTime;
+    for(let i=0;i<n;i++) chipClack(now + i*0.055 + Math.random()*0.02, (vol||1.0)*(0.7+Math.random()*0.5));
+  }catch(e){}
+}
+// 체크 = 테이블 노크 톡톡
+function sndKnock(){
+  if(!sndEnabled()) return;
+  try{
+    const c = ac(), now = c.currentTime;
+    [0, 0.13].forEach(dt=>{
+      const o = c.createOscillator(), g = c.createGain();
+      o.type='sine'; o.frequency.setValueAtTime(160, now+dt);
+      o.frequency.exponentialRampToValueAtTime(70, now+dt+0.07);
+      g.gain.setValueAtTime(1.4, now+dt);
+      g.gain.exponentialRampToValueAtTime(0.001, now+dt+0.09);
+      o.connect(g); g.connect(sndOut());
+      o.start(now+dt); o.stop(now+dt+0.1);
+    });
+  }catch(e){}
+}
+// 폴드 = 카드 스윽 넘기는 소리
+function sndFold(){
+  if(!sndEnabled()) return;
+  try{
+    const c = ac(), now = c.currentTime;
+    const len = Math.floor(c.sampleRate * 0.18);
+    const buf = c.createBuffer(1, len, c.sampleRate);
+    const d = buf.getChannelData(0);
+    for(let i=0;i<len;i++) d[i] = (Math.random()*2-1) * Math.sin(Math.PI * i/len);
+    const src = c.createBufferSource(); src.buffer = buf;
+    const lp = c.createBiquadFilter();
+    lp.type='lowpass';
+    lp.frequency.setValueAtTime(4000, now);
+    lp.frequency.exponentialRampToValueAtTime(600, now+0.18);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.7, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now+0.18);
+    src.connect(lp); lp.connect(g); g.connect(sndOut());
+    src.start(now);
+  }catch(e){}
+}
+// 코칭 답변 도착 알림음 (딩동)
+function sndDing(){
+  if(!sndEnabled()) return;
+  try{
+    const c = ac(), t = c.currentTime;
+    [[880,0],[1318,0.13]].forEach(pair=>{
+      const o = c.createOscillator(), g = c.createGain();
+      o.type = 'sine'; o.frequency.value = pair[0];
+      g.gain.setValueAtTime(0.55, t + pair[1]);
+      g.gain.exponentialRampToValueAtTime(0.001, t + pair[1] + 0.4);
+      o.connect(g); g.connect(sndOut());
+      o.start(t + pair[1]); o.stop(t + pair[1] + 0.45);
+    });
+  }catch(e){}
+}
+
+// 행동별 사운드 + 음성 안내
+function playActionSound(type, paid, isAllIn){
+  if(type==='fold'){ sndFold(); speak('폴드'); return; }
+  if(type==='check'){ sndKnock(); speak('체크'); return; }
+  if(isAllIn){ sndChips(12, 1.1); speak('올인'); return; }   // 올인: 칩 우르르
+  if(paid > 0) sndChips(Math.min(2 + Math.floor(paid/600), 9), 1.0);
+  speak(type==='raise' ? '레이즈' : '콜');
+}
+// 브라우저 정책상 첫 클릭 후부터 소리 재생 가능
+document.addEventListener('click', ()=>{ userInteracted = true; try{ ac(); }catch(e){} }, {once:true});
+// 음량 슬라이더 → 마스터 볼륨 즉시 반영
+document.addEventListener('DOMContentLoaded', ()=>{
+  const s = document.getElementById('sndVol');
+  if(s) s.oninput = ()=>{ if(masterGain) masterGain.gain.value = volGain(); };
+  const vo = document.getElementById('voiceOn');
+  if(vo) vo.onchange = ()=>{ if(vo.checked) speak('음성 켜짐'); };
+});
+
+/* ================= 기본 상수/유틸 ================= */
+const SB = 100, BB = 200, START_STACK = 10000;
+const SUITS = ['♠','♥','♦','♣'];
+const RANK_STR = {2:'2',3:'3',4:'4',5:'5',6:'6',7:'7',8:'8',9:'9',10:'10',11:'J',12:'Q',13:'K',14:'A'};
+const HAND_NAMES = ['하이카드','원 페어','투 페어','트리플','스트레이트','플러시','풀하우스','포카드','스트레이트 플러시'];
+const rnd = Math.random;
+const cardStr = c => RANK_STR[c.r] + c.s;
+const roundChips = x => Math.max(BB, Math.round(x/100)*100);
+
+function fullDeck(){
+  const d=[];
+  for(const s of SUITS) for(let r=2;r<=14;r++) d.push({r,s});
+  return d;
+}
+function shuffle(a){
+  for(let i=a.length-1;i>0;i--){ const j=Math.floor(rnd()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
+  return a;
+}
+
+/* ================= 핸드 평가 ================= */
+function evaluate5(cs){
+  const rs = cs.map(c=>c.r).sort((a,b)=>b-a);
+  const flush = cs.every(c=>c.s===cs[0].s);
+  const cnt = {};
+  rs.forEach(r=>cnt[r]=(cnt[r]||0)+1);
+  const groups = Object.entries(cnt).map(([r,n])=>[+r,n])
+    .sort((a,b)=> b[1]-a[1] || b[0]-a[0]);
+  const uniq = [...new Set(rs)];
+  let stHigh = 0;
+  if(uniq.length===5){
+    if(uniq[0]-uniq[4]===4) stHigh=uniq[0];
+    else if(uniq[0]===14 && uniq[1]===5 && uniq[1]-uniq[4]===3) stHigh=5;
+  }
+  if(flush && stHigh) return [8,stHigh];
+  if(groups[0][1]===4) return [7,groups[0][0],groups[1][0]];
+  if(groups[0][1]===3 && groups[1][1]===2) return [6,groups[0][0],groups[1][0]];
+  if(flush) return [5,...rs];
+  if(stHigh) return [4,stHigh];
+  if(groups[0][1]===3) return [3,groups[0][0],groups[1][0],groups[2][0]];
+  if(groups[0][1]===2 && groups[1][1]===2) return [2,groups[0][0],groups[1][0],groups[2][0]];
+  if(groups[0][1]===2) return [1,groups[0][0],groups[1][0],groups[2][0],groups[3][0]];
+  return [0,...rs];
+}
+function cmpEval(a,b){
+  for(let i=0;i<Math.max(a.length,b.length);i++){
+    const x=a[i]||0, y=b[i]||0;
+    if(x!==y) return x-y;
+  }
+  return 0;
+}
+function evaluate7(cs){
+  let best=null;
+  for(let a=0;a<3;a++)for(let b=a+1;b<4;b++)for(let c=b+1;c<5;c++)
+  for(let d=c+1;d<6;d++)for(let e=d+1;e<7;e++){
+    const v = evaluate5([cs[a],cs[b],cs[c],cs[d],cs[e]]);
+    if(!best || cmpEval(v,best)>0) best=v;
+  }
+  return best;
+}
+// 최고 5장 조합의 카드까지 반환 (승리 카드 하이라이트용)
+function bestFive(cs){
+  let best=null, bestCards=null;
+  const idx=[0,1,2,3,4,5,6];
+  for(let a=0;a<3;a++)for(let b=a+1;b<4;b++)for(let c=b+1;c<5;c++)
+  for(let d=c+1;d<6;d++)for(let e=d+1;e<7;e++){
+    const combo=[cs[a],cs[b],cs[c],cs[d],cs[e]];
+    const v = evaluate5(combo);
+    if(!best || cmpEval(v,best)>0){ best=v; bestCards=combo; }
+  }
+  return { ev:best, cards:bestCards };
+}
+// 족보 + 핵심 카드 라벨 (예: "원 페어 (7)", "투 페어 (K·9)")
+function handLabel(ev){
+  const name = HAND_NAMES[ev[0]];
+  const R = r => RANK_STR[r];
+  switch(ev[0]){
+    case 1: return name+' ('+R(ev[1])+')';
+    case 2: return name+' ('+R(ev[1])+'·'+R(ev[2])+')';
+    case 3: return name+' ('+R(ev[1])+')';
+    case 6: return name+' ('+R(ev[1])+'·'+R(ev[2])+')';
+    case 7: return name+' ('+R(ev[1])+')';
+    case 4: case 8: return name+' ('+R(ev[1])+' 하이)';
+    case 0: return name+' ('+R(ev[1])+')';
+    default: return name;
+  }
+}
+
+/* ================= 봇 판단용 계산 ================= */
+function chenScore(hole){
+  const hi = hole[0].r>=hole[1].r ? hole[0] : hole[1];
+  const lo = hole[0].r>=hole[1].r ? hole[1] : hole[0];
+  const pts = r => r===14?10 : r===13?8 : r===12?7 : r===11?6 : r/2;
+  if(hi.r===lo.r) return Math.max(pts(hi.r)*2, 5);
+  let s = pts(hi.r);
+  if(hi.s===lo.s) s+=2;
+  const gap = hi.r-lo.r-1;
+  if(gap===1) s-=1; else if(gap===2) s-=2; else if(gap===3) s-=4; else if(gap>=4) s-=5;
+  if(gap<=1 && hi.r<12) s+=1;
+  return Math.ceil(s);
+}
+function estimateEquity(hole, board, nOpp, iters){
+  iters = iters || 120;
+  const known = hole.concat(board);
+  const base = fullDeck().filter(c => !known.some(k=>k.r===c.r && k.s===c.s));
+  const needBoard = 5-board.length, need = nOpp*2 + needBoard;
+  let score=0;
+  for(let it=0; it<iters; it++){
+    const d = base.slice();
+    for(let j=0;j<need;j++){
+      const k = j+Math.floor(rnd()*(d.length-j));
+      [d[j],d[k]]=[d[k],d[j]];
+    }
+    const full = board.concat(d.slice(nOpp*2, nOpp*2+needBoard));
+    const mine = evaluate7(hole.concat(full));
+    let beaten=false, tied=false;
+    for(let o=0;o<nOpp;o++){
+      const c = cmpEval(mine, evaluate7([d[o*2],d[o*2+1]].concat(full)));
+      if(c<0){ beaten=true; break; }
+      if(c===0) tied=true;
+    }
+    if(!beaten) score += tied ? 0.5 : 1;
+  }
+  return score/iters;
+}
+
+/* ================= 플레이어 ================= */
+const players = [
+  { seat:0, name:'나', typeLabel:'(당신)', isHuman:true },
+  { seat:1, name:'예송', typeLabel:'프로급 고수', isHuman:false,
+    pers:{ style:'pro', open:7.5, call:7, threebet:10, aggr:0.8, bluff:0.14, margin:0.02 } },
+  { seat:2, name:'장송', typeLabel:'초보·신중', isHuman:false,
+    pers:{ style:'nit', open:8.5, call:8, threebet:11, aggr:0.5, bluff:0.05, margin:0.08 } },
+  { seat:3, name:'병송', typeLabel:'초보·과감', isHuman:false,
+    pers:{ style:'wild', open:5.5, call:4.5, threebet:9, aggr:0.7, bluff:0.22, margin:-0.03 } },
+];
+players.forEach(p=>{
+  p.stack=START_STACK; p.hole=[]; p.folded=false; p.allIn=false;
+  p.streetBet=0; p.totalContrib=0; p.hasActed=false; p.lastAct='';
+  p.rebuys=1;   // 이번 세션 총 충전 횟수 (최초 바이인 포함)
+});
+
+const state = {
+  handNo:0, button:Math.floor(rnd()*4),
+  deck:[], board:[], street:'',
+  currentBet:0, minRaiseSize:BB,
+  actionSeat:0, toAct:-1,
+  phase:'idle',            // idle | betting | runout | done
+  handStartStacks:[],
+  history:[],              // 이번 핸드 텍스트 히스토리
+};
+
+const potTotal = () => players.reduce((s,p)=>s+p.totalContrib,0);
+const alive    = () => players.filter(p=>!p.folded);
+const canAct   = () => players.filter(p=>!p.folded && !p.allIn);
+function posName(seat){
+  const d = (seat - state.button + 4) % 4;
+  return ['딜러','SB','BB','UTG'][d];
+}
+
+/* ================= 로그/히스토리 ================= */
+const logEl = document.getElementById('log');
+function log(text, cls){
+  const div = document.createElement('div');
+  if(cls) div.className = cls;
+  div.textContent = text;
+  logEl.appendChild(div);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+function hist(text){ state.history.push(text); }
+function logHist(text, cls){ log(text, cls); hist(text); }
+
+/* ================= 렌더링 ================= */
+function isHl(c){ return state.hlCards && state.hlCards.has(c.r+'-'+c.s); }
+function cardEl(c, small, hidden){
+  const d = document.createElement('div');
+  d.className = 'card' + (small?' cardSm':'') + (hidden?' back':'') +
+    (!hidden && (c.s==='♥'||c.s==='♦') ? ' red':'') +
+    (!hidden && isHl(c) ? ' hl':'');
+  if(!hidden){
+    // 실제 카드 배치: 모서리에 숫자+무늬 작게, 가운데 무늬 크게
+    d.innerHTML = '<span class="cidx">'+RANK_STR[c.r]+'<small>'+c.s+'</small></span>' +
+                  '<span class="suit">'+c.s+'</span>';
+  }
+  return d;
+}
+function render(){
+  document.getElementById('handInfo').textContent = '핸드 #'+state.handNo;
+  updateReserveBtn();
+  const bets = players.reduce((s,p)=>s+p.streetBet,0);
+  const collected = potTotal()-bets;
+  document.getElementById('potLine').textContent =
+    '팟: ' + potTotal().toLocaleString() + (bets? ' (베팅 '+bets.toLocaleString()+' 포함)':'');
+  const boardEl = document.getElementById('board');
+  boardEl.innerHTML='';
+  const slotNames = ['플랍 ①','플랍 ②','플랍 ③','턴','리버'];
+  for(let i=0;i<5;i++){
+    const wrap = document.createElement('div');
+    wrap.className='slotWrap';
+    if(state.board[i]){
+      wrap.appendChild(cardEl(state.board[i]));
+    } else {
+      const ph = document.createElement('div');
+      ph.className='card slot';
+      wrap.appendChild(ph);
+    }
+    const lb = document.createElement('div');
+    lb.className='slotLabel';
+    lb.textContent = slotNames[i];
+    wrap.appendChild(lb);
+    boardEl.appendChild(wrap);
+  }
+
+  players.forEach(p=>{
+    const el = document.getElementById('seat'+p.seat);
+    el.className = 'seat' + (p.folded?' folded':'')
+      + (!p.folded && state.toAct===p.seat && state.phase==='betting' ? ' acting' : '')
+      + (p.isWinner && state.phase==='done' ? ' winner' : '');
+    const showCards = p.isHuman || p.revealed;
+    let cardsHtml = '';
+    el.innerHTML = '';
+    // 명찰(박스)은 컴팩트하게, 카드는 박스 밖 펠트 위에
+    // 승리 배지는 명찰 위 별도 줄
+    if(p.winText){
+      const wb = document.createElement('div');
+      wb.className = 'winBadge' + (p.isWinner ? '' : ' returnBadge');
+      wb.textContent = (p.isWinner ? '🏆 ' : '') + p.winText;
+      el.appendChild(wb);
+    }
+    // 명찰: 아바타를 안에 넣어 세로 높이를 줄인다 (밖에 쌓으면 칸을 넘쳐 보드와 겹침)
+    const box = document.createElement('div');
+    box.className='box';
+    box.innerHTML =
+      '<div class="pod">'+p.name.slice(0,1)+
+        (p.seat===state.button?'<span class="dbtn">D</span>':'')+'</div>'+
+      '<div class="binfo">'+
+        '<div class="pname">'+p.name+'</div>'+
+        '<div class="ptype">'+p.typeLabel+'</div>'+
+        '<div class="pstack">'+p.stack.toLocaleString()+(p.allIn?' <em>올인</em>':'')+'</div>'+
+        (p.totalContrib
+          ? '<div class="contribLine">판 <b>'+p.totalContrib.toLocaleString()+'</b>'
+            + (p.streetBet ? '<span class="nowBet"> · 지금 '+p.streetBet.toLocaleString()+'</span>' : '')
+            + '</div>'
+          : '')+
+      '</div>';
+    if(p.folded){
+      const st = document.createElement('div');
+      st.className='foldStamp'; st.textContent='폴드';
+      box.appendChild(st);
+    }
+    el.appendChild(box);
+    // 액션 알약 + 깔린 칩을 한 줄에 (줄이 늘면 테이블 밖으로 잘린다)
+    const foot = document.createElement('div');
+    foot.className = 'seatFoot';
+    if(!p.folded && p.lastAct){
+      const la = document.createElement('div');
+      la.className='lastAct'; la.textContent = p.lastAct;
+      foot.appendChild(la);
+    }
+    const cardsDiv = document.createElement('div');
+    cardsDiv.className='cards';
+    if(p.hole.length && (p.isHuman || !p.folded || p.revealed)){   // 내 패는 폴드해도 계속 표시
+      p.hole.forEach(c=>cardsDiv.appendChild(cardEl(c, !p.isHuman, !showCards)));
+    }
+    el.appendChild(cardsDiv);
+    const riWrap = document.createElement('div');
+    riWrap.innerHTML = rebuyInfoHtml(p);
+    if(riWrap.firstChild) el.appendChild(riWrap.firstChild);   // 초기 상태면 줄 자체가 없음
+    if(p.streetBet){
+      const bet = document.createElement('div');
+      bet.className='betchip';
+      bet.appendChild(chipStackEl(p.streetBet));
+      foot.appendChild(bet);
+    }
+    if(foot.childNodes.length) el.appendChild(foot);
+  });
+  updateEquity();
+}
+
+/* 충전 횟수(최초 바이인 포함) + 세션 손익 표시 */
+function rebuyInfoHtml(p){
+  const invested = (p.rebuys||1) * START_STACK;
+  // 팟에 걸린 돈(totalContrib)은 아직 미확정이라 투입분으로 계산에 포함
+  const v = p.stack + p.totalContrib - invested;
+  // 충전도 손익도 없는 초기 상태면 줄을 만들지 않는다 (모든 자리에 "충전 1회 · 손익 +0"이 뜨는 노이즈 제거)
+  if((p.rebuys||1) <= 1 && v === 0) return '';
+  const cls = v >= 0 ? 'pl-p' : 'pl-m';
+  const sign = v >= 0 ? '+' : '−';
+  // 넓은 화면은 전체 문구, 좁은 화면은 압축형("🔄1 +17,100") — CSS로 전환
+  const amt = '<span class="'+cls+'">'+sign+Math.abs(v).toLocaleString()+'</span>';
+  return '<div class="rebuyInfo">'
+       + '<span class="rbFull">🔄 충전 '+(p.rebuys||1)+'회 · 손익 '+amt+'</span>'
+       + '<span class="rbShort">🔄'+(p.rebuys||1)+' '+amt+'</span>'
+       + '</div>';
+}
+
+/* 팟 이동 애니메이션: 보드 중앙에서 승자 자리로 칩이 날아감 */
+function animatePotToWinner(){
+  const winners = players.filter(p=>p.isWinner);
+  if(!winners.length) return;
+  const table = document.getElementById('table');
+  const tRect = table.getBoundingClientRect();
+  const bRect = document.getElementById('boardArea').getBoundingClientRect();
+  const startX = bRect.left + bRect.width/2 - tRect.left;
+  const startY = bRect.top + bRect.height/2 - tRect.top;
+  const colors = ['#c0392b','#2e86de','#27ae60','#2b2b2b'];
+  winners.forEach(w=>{
+    const sRect = document.getElementById('seat'+w.seat).getBoundingClientRect();
+    const endX = sRect.left + sRect.width/2 - tRect.left;
+    const endY = sRect.top + sRect.height/2 - tRect.top;
+    // transform으로만 움직여야 부드럽다 (left/top 애니메이션은 끊긴다)
+    for(let i=0;i<6;i++){
+      const chip = document.createElement('div');
+      chip.className = 'chip flyChip';
+      chip.style.background = colors[i % colors.length];
+      const jx = Math.random()*34 - 17, jy = Math.random()*16 - 8;
+      chip.style.left = (startX + jx) + 'px';
+      chip.style.top  = (startY + jy) + 'px';
+      chip.style.transform = 'translate(0,0) scale(1)';
+      table.appendChild(chip);
+      const dx = endX - (startX + jx), dy = endY - (startY + jy);
+      const rot = (Math.random()*140 - 70).toFixed(0);
+      requestAnimationFrame(()=>{
+        setTimeout(()=>{
+          chip.style.transform = 'translate('+dx.toFixed(1)+'px,'+dy.toFixed(1)+'px) scale(.55) rotate('+rot+'deg)';
+          chip.style.opacity = '0';
+        }, 40 + i*55);
+      });
+      setTimeout(()=>chip.remove(), 900 + i*55);
+    }
+  });
+  sndChips(6, 0.8);
+}
+
+/* 베팅 금액을 칩 아이콘으로 표현 (5000=검정, 1000=초록, 500=파랑, 100=빨강) */
+function chipStackEl(amount){
+  const wrap = document.createElement('div');
+  wrap.style.display = 'flex';
+  wrap.style.alignItems = 'center';
+  const denoms = [[5000,'#2b2b2b'],[1000,'#27ae60'],[500,'#2e86de'],[100,'#c0392b']];
+  const chips = [];
+  let rest = amount;
+  denoms.forEach(([v,c])=>{
+    while(rest >= v && chips.length < 10){ rest -= v; chips.push(c); }
+  });
+  if(!chips.length) chips.push('#c0392b');
+  chips.forEach(c=>{
+    const d = document.createElement('div');
+    d.className = 'chip';
+    d.style.background = c;
+    wrap.appendChild(d);
+  });
+  const amt = document.createElement('span');
+  amt.className = 'chipAmt';
+  amt.textContent = amount.toLocaleString();
+  wrap.appendChild(amt);
+  return wrap;
+}
+
+/* 내 실시간 승률 (몬테카를로 추정) */
+let eqKey='';
+function handTierText(hole){
+  const s = chenScore(hole);
+  const cards = hole.map(cardStr).join(' ');
+  let tier;
+  if(s >= 12) tier = '최상급 💎';
+  else if(s >= 9) tier = '상급 👍';
+  else if(s >= 7) tier = '중급';
+  else if(s >= 5) tier = '중하급';
+  else tier = '하급 ⚠️';
+  return '내 시작 핸드: '+cards+' — '+tier;
+}
+function updateEquity(){
+  const me = players[0];
+  const el = document.getElementById('equityVal');
+  const tierEl = document.getElementById('handTier');
+  if(!me.hole.length){ el.textContent='—'; tierEl.textContent=''; eqKey=''; return; }
+  tierEl.textContent = handTierText(me.hole);
+  if(me.folded){ el.textContent='폴드함'; eqKey=''; return; }
+  const nOpp = alive().length - 1;
+  if(nOpp < 1) return;
+  const key = state.handNo + '/' + state.board.length + '/' + nOpp;
+  if(key === eqKey) return;
+  eqKey = key;
+  const eq = estimateEquity(me.hole, state.board, nOpp, 220);
+  state.myEqPct = Math.round(eq*100);
+  el.textContent = Math.round(eq*100) + '%';
+  document.getElementById('equityNote').textContent =
+    '남은 상대 '+nOpp+'명이 무작위 핸드라고 가정한 시뮬레이션 추정치. 4인 기준 평균은 '+Math.round(100/(nOpp+1))+'% 부근';
+}
+function setMsg(t, myTurn){
+  const el = document.getElementById('msg');
+  el.textContent = t;
+  el.classList.toggle('myturn', !!myTurn);
+}
+
+/* ================= 자리 배치 ================= */
+let tableNotices = [];   // 다음 핸드 로그에 표시할 테이블 이벤트
+
+// 봇 3명의 자리를 랜덤으로 재배치 (나는 항상 아래 자리 고정)
+function shuffleSeats(label){
+  const bots = shuffle(players.slice(1));
+  for(let i=0;i<3;i++){
+    bots[i].seat = i+1;
+    players[i+1] = bots[i];
+  }
+  tableNotices.push('🔀 '+label+' → 나 → '+players.slice(1).map(p=>p.name).join(' → ')+' 순서');
+}
+
+/* ================= 핸드 진행 ================= */
+function startHand(){
+  // 파산자 처리: 10,000원 리필 + 자리 랜덤 재배치
+  let busted = false;
+  players.forEach(p=>{
+    if(p.stack<=0){
+      p.stack = START_STACK;
+      p.rebuys = (p.rebuys||0) + 1;
+      tableNotices.push('💸 '+p.name+' 파산! 10,000원 채우고 재참가 (이번 세션 '+p.rebuys+'번째 충전)');
+      busted = true;
+    }
+  });
+  if(busted) shuffleSeats('파산자 발생 — 자리 랜덤 재배치');
+
+  state.handNo++;
+  foldReserved = false;
+  state.button = (state.button+1)%4;
+  state.deck = shuffle(fullDeck());
+  state.board = [];
+  state.street = 'preflop';
+  state.currentBet = 0; state.minRaiseSize = BB;
+  state.phase = 'betting';
+  state.history = [];
+
+  state.resultMsg = '';
+  state.hlCards = new Set();
+  players.forEach(p=>{
+    p.hole=[]; p.folded=false; p.allIn=false; p.revealed=false; p.foldInfo=null; p.isWinner=false; p.winText='';
+    p.streetBet=0; p.totalContrib=0; p.hasActed=false; p.lastAct='';
+  });
+  state.handStartStacks = players.map(p=>p.stack);
+  glog('');
+  glog('═══ 핸드 #'+state.handNo+' 시작 ═══ 자리: '
+     + players.map(p=>p.name+'('+posName(p.seat)+' '+p.stack.toLocaleString()+')').join(' / '));
+  glog('   설정: 자동상의 '+(document.getElementById('confirmMode').checked?'켬':'끔')
+     + ' / 코치 '+document.getElementById('coachModelSel').value
+     + ' / 데이터기록 '+(document.getElementById('profileOn').checked?'켬':'끔')
+     + ' / 서버 '+(coachOnline?'연결':'끊김'));
+
+  logEl.innerHTML='';
+  logHist('═══ 핸드 #'+state.handNo+' (블라인드 '+SB+'/'+BB+') ═══','street');
+  tableNotices.forEach(n=>logHist(n,'info'));
+  tableNotices = [];
+  hist('딜러: '+players[state.button].name);
+  hist('스택: ' + players.map(p=>p.name+'('+posName(p.seat)+') '+p.stack).join(', '));
+
+  // 블라인드
+  const sbSeat=(state.button+1)%4, bbSeat=(state.button+2)%4;
+  putChips(players[sbSeat], SB);
+  putChips(players[bbSeat], BB);
+  state.currentBet = BB;
+  logHist(players[sbSeat].name+': 블라인드(소) '+SB);
+  logHist(players[bbSeat].name+': 블라인드(대) '+BB);
+
+  // 홀카드
+  for(let i=0;i<2;i++) players.forEach(p=>p.hole.push(state.deck.pop()));
+  const me = players[0];
+  logHist('--- 프리플랍 --- 내 카드: '+me.hole.map(cardStr).join(' '),'street');
+
+  state.actionSeat = (bbSeat+1)%4;
+  state.lastRec = null;
+  state.botThoughts = [];
+  state.decisions = [];
+  precoach = null;      // 새 판 → 미리 받아둔 분석 폐기
+  state.handStartAt = Date.now();
+  if(state.handNo > 1) collapseOldChat();
+  document.querySelector('.ctlEnd').style.display='none';
+  document.getElementById('btnReview').style.display='none';
+  document.getElementById('btnThoughts').style.display='none';
+  document.getElementById('btnSaveHand').style.display='none';
+  setMsg('');
+  render();
+  proceed();
+}
+
+function putChips(p, amt){
+  amt = Math.min(amt, p.stack);
+  p.stack -= amt;
+  p.streetBet += amt;
+  p.totalContrib += amt;
+  if(p.stack===0) p.allIn = true;
+  return amt;
+}
+
+function nextActor(){
+  for(let i=0;i<4;i++){
+    const s = (state.actionSeat+i)%4;
+    const p = players[s];
+    if(p.folded || p.allIn) continue;
+    if(p.streetBet < state.currentBet || !p.hasActed) return s;
+  }
+  return -1;
+}
+
+function proceed(){
+  render();
+  if(alive().length===1){ winByFold(); return; }
+  const s = nextActor();
+  if(s===-1){ endStreet(); return; }
+  state.toAct = s;
+  render();
+  const p = players[s];
+  if(p.folded || p.allIn){ // 방어: 폴드/올인한 사람에게 차례가 오면 건너뜀
+    p.hasActed = true;
+    state.actionSeat = (s+1)%4;
+    state.toAct = -1;
+    proceed();
+    return;
+  }
+  if(p.isHuman){
+    if(foldReserved){
+      foldReserved = false;
+      updateReserveBtn();
+      const toCall = state.currentBet - p.streetBet;
+      if(toCall === 0){
+        // 공짜로 볼 수 있으면 폴드는 순수 손해 → 체크로 전환
+        setMsg('🚫 폴드 예약 → 공짜 체크가 가능해서 체크로 전환했습니다', true);
+        logHist('(폴드 예약이었지만 공짜라 체크로 전환)', 'me');
+        glog('  ★ 폴드 예약 사용 → 콜 금액 0이라 체크로 전환 (코치 안 부름)');
+        applyAction(p, 'check', 0);
+      } else {
+        // 폴드 직전 상황을 떠놓고 먼저 접는다 — 평가는 게임을 멈추지 않고 뒤따라옴
+        const snap = situationText(false);
+        setMsg('🚫 예약대로 폴드했습니다');
+        glog('  ★ 폴드 예약 사용 → 즉시 폴드 (평가는 사후에 받음)');
+        applyAction(p, 'fold', 0);
+        reviewReservedFold(snap, toCall);
+      }
+      return;
+    }
+    setMsg('👉 당신 차례입니다', true);
+    showControls();
+    // 내 턴이 열린 시각 — 이게 있어야 "내가 고민한 시간"을 계산할 수 있다
+    myTurnAt = Date.now();
+    glog('  ▶ 내 차례 시작 (콜 필요 '+Math.max(0,state.currentBet-p.streetBet).toLocaleString()
+       + ', 팟 '+potTotal().toLocaleString()+')');
+    startPrecoach();   // 내가 고민하는 동안 코치는 미리 분석해둔다
+  } else {
+    setMsg(p.name+' 생각 중...');
+    hideControls();
+    setTimeout(()=>botAct(p), 1200+rnd()*900);
+  }
+}
+
+function actLabel(p, type, target){
+  if(type==='fold') return '폴드';
+  if(type==='check') return '체크';
+  if(type==='call') return p.allIn? '올인 콜 ('+p.streetBet+')' : '콜 '+p.streetBet;
+  return (p.allIn?'올인 ':'')+'레이즈 → '+target;
+}
+
+function applyAction(p, type, target){
+  // target: raise 시 이번 스트리트 총 베팅 목표액
+  let paid = 0;
+  if(type==='fold'){
+    p.folded = true;
+  } else if(type==='check'){
+    // nothing
+  } else if(type==='call'){
+    paid = putChips(p, state.currentBet - p.streetBet);
+  } else if(type==='raise'){
+    const maxTo = p.streetBet + p.stack;
+    target = Math.min(target, maxTo);
+    if(target <= state.currentBet){
+      // 스택이 부족해 레이즈가 성립하지 않으면 올인 콜로 처리
+      type = 'call';
+      paid = putChips(p, state.currentBet - p.streetBet);
+    } else {
+      const minTo = state.currentBet + state.minRaiseSize;
+      if(target < minTo && target < maxTo) target = Math.min(minTo, maxTo);
+      const raiseSize = target - state.currentBet;
+      paid = putChips(p, target - p.streetBet);
+      if(raiseSize >= state.minRaiseSize) state.minRaiseSize = raiseSize;
+      state.currentBet = p.streetBet;
+      players.forEach(q=>{ if(q!==p && !q.folded && !q.allIn) q.hasActed=false; });
+    }
+  }
+  p.hasActed = true;
+  playActionSound(type, paid, p.allIn && paid > 0);
+  p.lastAct = actLabel(p, type, p.streetBet);
+  const line = p.name+': '+p.lastAct;
+  logHist(line, p.isHuman?'me':'');
+  glog('  ['+state.street+'] '+(p.isHuman?'★ ':'')+line
+     + ' (스택 '+p.stack.toLocaleString()+', 이번판 투입 '+p.totalContrib.toLocaleString()
+     + ', 팟 '+potTotal().toLocaleString()+')');
+  if(p.isHuman && type==='fold') setMsg('폴드했습니다 — 남은 플레이어들이 진행합니다');
+  state.actionSeat = (p.seat+1)%4;
+  state.toAct = -1;
+  proceed();
+}
+
+/* ================= 스트리트 전환 ================= */
+function endStreet(){
+  players.forEach(p=>{ p.streetBet=0; p.hasActed=false; });
+  state.currentBet=0; state.minRaiseSize=BB;
+  state.toAct=-1;
+
+  const order = ['preflop','flop','turn','river'];
+  const idx = order.indexOf(state.street);
+
+  if(state.street==='river'){ showdown(); return; }
+
+  // 더 이상 베팅할 사람이 없으면 런아웃
+  if(canAct().length<=1 && alive().length>=2){
+    runout(idx);
+    return;
+  }
+  dealStreet(idx+1);
+  state.actionSeat = (state.button+1)%4;
+  proceed();
+}
+
+function dealStreet(idx){
+  const names=['','플랍','턴','리버'];
+  const cnt = idx===1?3:1;
+  for(let i=0;i<cnt;i++) state.board.push(state.deck.pop());
+  state.street = ['preflop','flop','turn','river'][idx];
+  players.forEach(p=>{ if(!p.folded) p.lastAct=''; });
+  logHist('--- '+names[idx]+': '+state.board.map(cardStr).join(' ')+' (팟 '+potTotal()+') ---','street');
+  glog('── '+names[idx]+': '+state.board.map(cardStr).join(' ')+' (팟 '+potTotal().toLocaleString()+')');
+  render();
+}
+
+function runout(fromIdx){
+  state.phase='runout';
+  players.forEach(p=>{ if(!p.folded) p.revealed=true; });
+  alive().forEach(p=>{ if(!p.isHuman) hist(p.name+' 공개: '+p.hole.map(cardStr).join(' ')); });
+  setMsg('올인! 남은 카드를 오픈합니다...');
+  render();
+  let i = fromIdx+1, delay=900;
+  const step = ()=>{
+    if(i>3){ setTimeout(showdown, 700); return; }
+    dealStreet(i); i++;
+    setTimeout(step, delay);
+  };
+  setTimeout(step, delay);
+}
+
+/* ================= 결과 처리 ================= */
+function winByFold(){
+  const w = alive()[0];
+  const amt = potTotal();
+  w.stack += amt;
+  w.isWinner = true;
+  w.winText = '+'+amt.toLocaleString();   // 전원 폴드 승리 (족보 없음)
+  players.forEach(p=>p.totalContrib=0);
+  state.resultMsg = '🏆 '+w.name+' 승리 — 전원 폴드 (+'+amt.toLocaleString()+')';
+  logHist('🏆 '+w.name+' 승리! (모두 폴드) +'+amt,'win');
+  finishHand();
+}
+
+function showdown(){
+  state.phase='done';
+  players.forEach(p=>{ if(!p.folded) p.revealed=true; });
+  const evals = {};
+  alive().forEach(p=>{
+    evals[p.seat] = evaluate7(p.hole.concat(state.board));
+    p.lastAct = '['+HAND_NAMES[evals[p.seat][0]]+']';   // 각자 무슨 족보였는지 자리에 표시
+    logHist('쇼다운 - '+p.name+': '+p.hole.map(cardStr).join(' ')+' → '+HAND_NAMES[evals[p.seat][0]],
+      p.isHuman?'me':'');
+  });
+
+  // 사이드팟 계산
+  const levels = [...new Set(players.filter(p=>p.totalContrib>0).map(p=>p.totalContrib))].sort((a,b)=>a-b);
+  let prev=0;
+  const pots=[];
+  for(const lv of levels){
+    let amt=0;
+    players.forEach(p=>{ amt += Math.max(0, Math.min(p.totalContrib,lv)-prev); });
+    const elig = alive().filter(p=>p.totalContrib>=lv);
+    if(amt>0 && elig.length) pots.push({amt, elig});
+    prev=lv;
+  }
+  const wonTotal = {};   // 이름 → 실제 팟에서 딴 금액(승리)
+  const returned = {};   // 이름 → 아무도 콜 안 한 초과 베팅 반환액(승리 아님)
+  pots.forEach((pot,i)=>{
+    // 대상이 1명뿐인 팟 = 아무도 대항 못 한 초과 베팅 → 그 사람에게 그대로 반환(거스름돈)
+    if(pot.elig.length === 1){
+      const w = pot.elig[0];
+      w.stack += pot.amt;
+      returned[w.name] = (returned[w.name]||0) + pot.amt;
+      logHist('↩️ '+w.name+' 미콜 베팅 반환 +'+pot.amt.toLocaleString()+' (아무도 콜하지 않은 초과분 — 승패와 무관)','info');
+      return;
+    }
+    let best=null;
+    pot.elig.forEach(p=>{ if(!best || cmpEval(evals[p.seat],evals[best.seat])>0) best=p; });
+    const winners = pot.elig.filter(p=>cmpEval(evals[p.seat],evals[best.seat])===0);
+    const share = Math.floor(pot.amt/winners.length);
+    winners.forEach((w,j)=>{
+      const got = share + (j===0 ? pot.amt-share*winners.length : 0);
+      w.stack += got;
+      w.isWinner = true;
+      wonTotal[w.name] = (wonTotal[w.name]||0) + got;
+      logHist('🏆 '+w.name+' '+(pots.length>1?('팟'+(i+1)+' '):'')+'획득 +'+got.toLocaleString()+' ('+HAND_NAMES[evals[w.seat][0]]+')','win');
+    });
+  });
+  // 승자 자리에 족보 + 획득 금액, 중앙에 결과 메시지
+  const parts = [];
+  players.forEach(p=>{
+    if(p.isWinner){
+      const bf = bestFive(p.hole.concat(state.board));
+      const label = handLabel(bf.ev);
+      p.winText = label+' +'+wonTotal[p.name].toLocaleString();
+      bf.cards.forEach(c=> state.hlCards.add(c.r+'-'+c.s));   // 승리 5장 하이라이트
+      parts.push(p.name+' 승리 — '+label+' (+'+wonTotal[p.name].toLocaleString()+')');
+    } else if(returned[p.name]){
+      // 승리는 아니지만 초과 베팅을 돌려받은 사람 — 오해 없게 '반환'으로 표기
+      p.winText = '↩️ 미콜 반환 +'+returned[p.name].toLocaleString();
+    }
+  });
+  state.resultMsg = parts.length ? ('🏆 '+parts.join(' / ')) : '결과 없음';
+  players.forEach(p=>p.totalContrib=0);
+  finishHand();
+}
+
+let handsDone = 0;
+const PROFILE_EVERY = 10; // 10판마다 프로필 자동 갱신
+
+// 누적 판수를 DB에서 불러오기 (새로고침/기기 변경에도 이어짐)
+(async ()=>{
+  try{
+    const r = await fetch(DB_URL + '/get?ns=holdem&key=handsDone');
+    const j = await r.json();
+    if(typeof j.value === 'number') handsDone = j.value;
+  }catch(e){}
+})();
+
+// 설정(데이터 기록, 자동 상의)을 DB에서 관리 — 새로고침/기기 변경에도 유지
+function applySettings(v){
+  if(!v) return;
+  if(typeof v.record === 'boolean') document.getElementById('profileOn').checked = v.record;
+  if(typeof v.consult === 'boolean') document.getElementById('confirmMode').checked = v.consult;
+  if(v.model) document.getElementById('coachModelSel').value = v.model;
+  if(typeof v.snd === 'boolean') document.getElementById('sndOn').checked = v.snd;
+  if(typeof v.voice === 'boolean') document.getElementById('voiceOn').checked = v.voice;
+  if(typeof v.vol === 'number'){
+    document.getElementById('sndVol').value = v.vol;
+    if(masterGain) masterGain.gain.value = volGain();
+  }
+  if(typeof v.logH === 'number') applyLogH(v.logH);
+}
+async function loadSettings(){
+  // localStorage 우선 즉시 반영(빠름·확실), DB로 덮어쓰기(기기 간 동기화)
+  try{ applySettings(JSON.parse(localStorage.getItem('holdemSettings')||'null')); }catch(e){}
+  try{
+    const r = await fetch(DB_URL + '/get?ns=holdem&key=settings');
+    const j = await r.json();
+    if(j.value) applySettings(j.value);
+  }catch(e){}
+}
+function saveSettings(){
+  const v = {
+    record: document.getElementById('profileOn').checked,
+    consult: document.getElementById('confirmMode').checked,
+    model: document.getElementById('coachModelSel').value,
+    snd: document.getElementById('sndOn').checked,
+    voice: document.getElementById('voiceOn').checked,
+    vol: +document.getElementById('sndVol').value,
+    logH: Math.round(document.getElementById('log').getBoundingClientRect().height),
+  };
+  try{ localStorage.setItem('holdemSettings', JSON.stringify(v)); }catch(e){}
+  fetch(DB_URL + '/set', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ ns:'holdem', key:'settings', value:v }),
+  }).catch(()=>{});
+}
+document.getElementById('profileOn').addEventListener('change', saveSettings);
+document.getElementById('confirmMode').addEventListener('change', saveSettings);
+document.getElementById('coachModelSel').addEventListener('change', saveSettings);
+document.getElementById('sndOn').addEventListener('change', saveSettings);
+document.getElementById('voiceOn').addEventListener('change', saveSettings);
+// 음량 슬라이더: 드래그 중 값이 바뀔 때마다 디바운스 저장 (change보다 안정적)
+let volSaveTimer;
+document.getElementById('sndVol').addEventListener('input', ()=>{
+  clearTimeout(volSaveTimer);
+  volSaveTimer = setTimeout(saveSettings, 400);
+});
+
+// 액션 로그는 클릭으로만 펼친다.
+// (마우스가 스칠 때마다 열렸다 닫히면 채팅까지 밀려서 화면이 정신없어진다)
+
+// 코치 채팅 ↔ 액션 로그 크기 조절 (핸들 드래그, 높이는 설정으로 저장)
+function applyLogH(h){
+  // 모바일 서랍(80vh)에선 로그가 채팅을 다 먹지 않게 상한을 낮게
+  const cap = window.matchMedia('(max-width:950px)').matches
+    ? Math.round(window.innerHeight*0.35) : Math.round(window.innerHeight*0.6);
+  h = Math.max(60, Math.min(cap, Math.round(h)));
+  document.getElementById('log').style.height = h+'px';
+}
+{
+  const handle = document.getElementById('logResize');
+  const logEl = document.getElementById('log');
+  let drag = null;
+  handle.addEventListener('pointerdown', e=>{
+    drag = { y:e.clientY, h:logEl.getBoundingClientRect().height };
+    handle.classList.add('drag');
+    handle.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  handle.addEventListener('pointermove', e=>{
+    if(drag) applyLogH(drag.h + (drag.y - e.clientY));   // 위로 끌면 로그가 커짐
+  });
+  const end = ()=>{
+    if(!drag) return;
+    drag = null;
+    handle.classList.remove('drag');
+    saveSettings();
+  };
+  handle.addEventListener('pointerup', end);
+  handle.addEventListener('pointercancel', end);
+}
+loadSettings();
+
+function finishHand(){
+  state.phase='done';
+  state.toAct=-1;
+  {
+    const me = players[0];
+    const start = (state.handStartStacks && state.handStartStacks[0]) || START_STACK;
+    const win = players.filter(p=>p.isWinner).map(p=>p.name+(p.winText?' ('+p.winText+')':'')).join(', ');
+    if(state.handStartAt) glog('◆ 이 판에 걸린 시간: '+((Date.now()-state.handStartAt)/1000).toFixed(1)+'초');
+    glog('◆ 결과: 승자 '+(win||'-')
+       + ' / 내 패 '+(me.hole.length?me.hole.map(cardStr).join(' '):'-')
+       + ' / 보드 '+(state.board.length?state.board.map(cardStr).join(' '):'(없음)')
+       + ' / 내 손익 '+((me.stack-start)>=0?'+':'')+(me.stack-start).toLocaleString()
+       + ' / 내 스택 '+me.stack.toLocaleString());
+  }
+  // 핸드 종료: 전원 패 공개 (폴드한 사람은 이유도 표시)
+  const streetKo = { preflop:'프리플랍', flop:'플랍', turn:'턴', river:'리버' };
+  players.forEach(p=>{
+    if(p.isHuman || !p.hole.length) return;
+    const wasRevealed = p.revealed;
+    p.revealed = true;
+    if(p.folded){
+      logHist('👀 '+p.name+' 폴드 패: '+p.hole.map(cardStr).join(' ')+
+        (p.foldInfo ? ' ('+streetKo[p.foldInfo.street]+'에서 폴드 — '+p.foldInfo.text+')' : ''), 'info');
+    } else if(!wasRevealed){
+      // 쇼다운 없이 (전원 폴드로) 이긴 승자의 패도 공개
+      logHist('👀 '+p.name+' 패 공개: '+p.hole.map(cardStr).join(' '), 'info');
+    }
+  });
+  setTimeout(animatePotToWinner, 200);   // 팟이 승자에게 날아가는 연출
+  // 기록 처리: 켜져 있으면 자동 저장+알림, 꺼져 있으면 소급 저장 버튼 제공
+  state.lastRec = buildHandRecord();
+  if(document.getElementById('profileOn').checked){
+    commitHandRecord(state.lastRec);
+    state.lastRec = null;
+  } else {
+    document.getElementById('btnSaveHand').style.display='inline-block';
+    addChat('sys', '이 판은 저장되지 않았어요 (📝 데이터 기록 꺼짐). 이 판만 저장하려면 하단 [💾 이번 판 기록]을 누르세요.');
+  }
+  hideControls();
+  setMsg(state.resultMsg || '핸드 종료');
+  document.querySelector('.ctlEnd').style.display='flex';
+  document.getElementById('btnNext').style.display='inline-block';
+  document.getElementById('btnReview').style.display='inline-block';
+  document.getElementById('btnThoughts').style.display='inline-block';
+  render();
+}
+
+/* ================= 봇 AI ================= */
+// 폭주 모드: 카드와 무관하게 랜덤 행동. 오버벳/묻지마 올인. (병송이 25% 확률로 진입)
+function maniacAct(p, toCall, pot){
+  const maxTo = p.streetBet + p.stack;
+  const randRaise = ()=>{
+    const minTo = Math.min(state.currentBet + state.minRaiseSize, maxTo);
+    const roll = rnd();
+    if(roll < 0.15) return maxTo;                                    // 묻지마 올인
+    if(roll < 0.40) return Math.min(maxTo,                            // 큰 오버벳 (스택 절반급)
+      Math.max(minTo, roundChips(p.stack*(0.3+rnd()*0.4) + state.currentBet)));
+    return Math.min(maxTo,                                            // 일반 레이즈 (그래도 큼직하게)
+      Math.max(minTo, roundChips(state.currentBet*2 + pot*(0.4+rnd()*0.8) + BB*2)));
+  };
+  const r = rnd();
+  let type, target=0, why='';
+  if(toCall === 0){
+    if(r < 0.45){ type='check'; why='(폭주 모드) 일단 체크'; }
+    else { type='raise'; target=randRaise(); why='(폭주 모드) 카드와 무관하게 지름'; }
+  } else {
+    if(r < 0.12){ type='fold'; why='(폭주 모드) 특별한 이유 없이 그냥 접음'; p.foldInfo={ street: state.street, text: why }; }
+    else if(r < 0.62){ type='call'; why='(폭주 모드) 그냥 따라감'; }
+    else { type='raise'; target=randRaise(); why='(폭주 모드) 카드와 무관하게 지름'; }
+  }
+  recordBotThought(p, type, target, why);
+  applyAction(p, type, target);
+}
+
+function botAct(p){
+  if(state.phase!=='betting') return;
+  const t = p.pers;
+  const toCall = state.currentBet - p.streetBet;
+  const pot = potTotal();
+  const nOpp = alive().length-1;
+
+  // 병송(과감한 초보): 평소엔 루즈-어그레시브하게 카드 보고 치지만, 15% 확률로 폭주(랜덤 오버벳/올인)
+  if(t.style === 'wild' && rnd() < 0.15){ maniacAct(p, toCall, pot); return; }
+
+  let type='fold', target=0, why='';
+
+  if(state.street==='preflop'){
+    // 프로는 판단 흔들림(노이즈)이 적음
+    const score = chenScore(p.hole) + (t.style==='pro' ? (rnd()-0.5) : (rnd()*2-1));
+    const dpos = (p.seat - state.button + 4) % 4;
+    const posAdj = [ -1, 0.5, 0, 1.5 ][dpos]; // BTN,SB,BB,UTG
+    const raised = state.currentBet > BB;
+    const openTo = roundChips(BB*3 + (alive().length-2)*0 + pot*0.2);
+
+    const sc = score.toFixed(1);
+    if(!raised){
+      if(toCall===0){ // BB 옵션
+        if(score >= t.open && rnd()<t.aggr){ type='raise'; target=openTo; why='핸드 점수 '+sc+' — 공짜 체크 대신 판을 키움'; }
+        else { type='check'; why='공짜로 플랍을 보는 자리라 체크'; }
+      } else {
+        if(score >= t.open + posAdj){
+          if(rnd() < 0.35 + t.aggr*0.55){ type='raise'; target=openTo; why='핸드 점수 '+sc+'로 오픈 기준 충족 — 레이즈'; }
+          else { type='call'; why='핸드 점수 '+sc+'로 괜찮지만 이번엔 조용히 콜'; }
+        }
+        else if(score >= t.call + posAdj*0.5){ type='call'; why='핸드 점수 '+sc+' — 참여할 만해서 콜'; }
+        else if(rnd() < t.bluff*0.4){ type='raise'; target=openTo; why='핸드는 약하지만(점수 '+sc+') 찔러보는 레이즈'; }
+        else { type='fold'; why='시작 핸드가 약해서 참여 기준 미달 (점수 '+sc+')'; }
+      }
+    } else {
+      if(score >= t.threebet){
+        if(rnd() < t.aggr){ type='raise'; target=roundChips(state.currentBet*3); why='강한 핸드(점수 '+sc+') — 3벳으로 되받아침'; }
+        else { type='call'; why='강한 핸드(점수 '+sc+')지만 콜로 숨김'; }
+      }
+      else if(score >= t.call + 1.5 && toCall <= p.stack*0.25){ type='call'; why='레이즈를 받아줄 만한 핸드(점수 '+sc+') — 콜'; }
+      else if(rnd() < t.bluff*0.35){ type='raise'; target=roundChips(state.currentBet*3); why='약한 핸드로 블러프 3벳 시도'; }
+      else { type='fold'; why='앞선 레이즈를 받기엔 핸드가 부족 (점수 '+sc+')'; }
+    }
+  } else {
+    // 프로(예송)는 더 많은 시뮬레이션으로 정밀하게 계산
+    const eq = estimateEquity(p.hole, state.board, nOpp, t.style==='pro' ? 260 : 120);
+    const eqPct = Math.round(eq*100);
+    if(toCall===0){
+      if(eq > 0.55 + t.margin && rnd() < 0.35 + t.aggr*0.5){
+        type='raise'; target=roundChips(pot*0.6); why='추정 승률 '+eqPct+'% — 밸류벳으로 뽑아내기';
+      }
+      // 상대들이 체크하고 넘어온 상황 = 약해 보임 → 초보들도 이 정도 심리는 읽고 찔러본다
+      else if(eq < 0.35 && rnd() < t.bluff*1.6){ type='raise'; target=roundChips(pot*0.55); why='승률 '+eqPct+'%뿐이지만 다들 체크 = 약해 보여서 찔러봄'; }
+      else { type='check'; why='승률 '+eqPct+'% — 무리하지 않고 체크'; }
+    } else {
+      const potOdds = toCall/(pot+toCall);
+      const poPct = Math.round(potOdds*100);
+      if(eq > Math.max(0.68, potOdds+0.25) && rnd() < t.aggr){
+        type='raise'; target=roundChips(state.currentBet*2.5 + pot*0.3); why='승률 '+eqPct+'%로 강함 — 레이즈로 키움';
+      }
+      else if(eq > potOdds + t.margin){ type='call'; why='승률 '+eqPct+'% > 필요 승률 '+poPct+'% — 콜 수지 맞음'; }
+      else if(rnd() < t.bluff*0.4 && toCall < p.stack*0.15){
+        type='raise'; target=roundChips(state.currentBet*2.5); why='승률 '+eqPct+'%로 낮지만 블러프 레이즈';
+      }
+      else { type='fold'; why='추정 승률 '+eqPct+'%로는 콜 '+toCall+'이 수지에 안 맞음 (필요 '+poPct+'%)'; }
+    }
+    // 콜 금액이 0이 아닌데 폴드 판정이어도 공짜면 체크
+    if(type==='fold' && toCall===0) type='check';
+  }
+  if(type==='call' && toCall===0) type='check';
+  if(type==='fold') p.foldInfo = { street: state.street, text: why || '상황이 불리하다고 판단' };
+  recordBotThought(p, type, target, why);
+  applyAction(p, type, target);
+}
+
+// 봇의 속마음을 기록 (판이 끝난 뒤에만 공개)
+function recordBotThought(p, type, target, think){
+  glog('     └ '+p.name+' 속마음: '+think);
+  if(!state.botThoughts) state.botThoughts = [];
+  const actKo = { fold:'폴드', check:'체크', call:'콜' };
+  state.botThoughts.push({
+    name: p.name,
+    street: state.street,
+    act: type==='raise' ? ('레이즈 '+target.toLocaleString()) : actKo[type],
+    think: think || '',
+  });
+}
+
+/* ================= 사용자 컨트롤 ================= */
+const btnFold=document.getElementById('btnFold');
+const btnCall=document.getElementById('btnCall');
+const btnRaise=document.getElementById('btnRaise');
+const raiseBox=document.getElementById('raiseBox');
+const slider=document.getElementById('raiseSlider');
+const amtInput=document.getElementById('raiseAmt');
+const turnHint=document.getElementById('turnHint');
+
+let pending = null;
+const pendingBox = document.getElementById('pendingBox');
+const ctlMain = document.querySelector('.ctlMain');
+const ctlEnd = document.querySelector('.ctlEnd');
+
+function hideControls(){
+  const ps = document.getElementById('preState');
+  if(ps){ ps.textContent=''; ps.className=''; }
+  ctlMain.style.display='none';
+  raiseBox.style.display='none';
+  pendingBox.style.display='none';
+  clearApplyDock();
+  turnHint.textContent='';
+  const oh = document.getElementById('oddsHint');
+  if(oh) oh.innerHTML='';
+}
+function showControls(){
+  pending = null;
+  pendingBox.style.display='none';
+  ctlMain.style.display='flex';
+  const me=players[0];
+  const toCall = state.currentBet - me.streetBet;
+  // 팟 오즈 자동 계산기: 콜에 필요한 승률 vs 내 승률
+  const oh = document.getElementById('oddsHint');
+  if(toCall > 0){
+    const pot = potTotal();
+    const needPct = Math.round(toCall / (pot + toCall) * 100);
+    let cmp = '';
+    if(typeof state.myEqPct === 'number'){
+      cmp = ' · 내 승률 ' + state.myEqPct + '% ' +
+        (state.myEqPct >= needPct
+          ? '<span class="good">✅ 가격은 유리 (패 질은 별도!)</span>'
+          : '<span class="bad">❌ 가격부터 손해</span>');
+    }
+    oh.innerHTML = '📐 콜 ' + toCall.toLocaleString() + ' → 이기면 ' + (pot + toCall).toLocaleString() +
+      ' → 필요 승률 ' + needPct + '%' + cmp;
+  } else {
+    oh.innerHTML = '';
+  }
+  turnHint.textContent='👉 내 차례';
+  btnFold.disabled = toCall===0;
+  btnCall.textContent = toCall===0 ? '체크' :
+    (toCall>=me.stack ? '올인 콜 ('+me.stack+')' : '콜 '+toCall);
+
+  const minTo = Math.min(state.currentBet + state.minRaiseSize, me.streetBet+me.stack);
+  const maxTo = me.streetBet + me.stack;
+  if(maxTo > state.currentBet){
+    raiseBox.style.display='flex';
+    slider.min=minTo; slider.max=maxTo; slider.step=100; slider.value=minTo;
+    amtInput.min=minTo; amtInput.max=maxTo; amtInput.value=minTo;
+    updateRaiseBtn();
+  } else raiseBox.style.display='none';
+}
+function updateRaiseBtn(){
+  const me=players[0];
+  const v = +amtInput.value || +slider.value;
+  btnRaise.textContent = (v>=me.streetBet+me.stack?'올인 ':'') +
+    (state.currentBet>0?'레이즈 → ':'벳 ') + v.toLocaleString();
+}
+slider.oninput=()=>{ amtInput.value=slider.value; updateRaiseBtn(); };
+// 100원 단위 업/다운 버튼
+function nudgeRaise(d){
+  let v = (+amtInput.value || +slider.min) + d;
+  v = Math.max(+slider.min, Math.min(+slider.max, v));
+  amtInput.value = v;
+  slider.value = v;
+  updateRaiseBtn();
+}
+document.getElementById('btnMinus').onclick = ()=>nudgeRaise(-100);
+document.getElementById('btnPlus').onclick  = ()=>nudgeRaise(100);
+amtInput.oninput=()=>{
+  let v=Math.max(+slider.min, Math.min(+slider.max, +amtInput.value||+slider.min));
+  slider.value=v; updateRaiseBtn();
+};
+document.querySelectorAll('.preset').forEach(b=>{
+  b.onclick=()=>{
+    const me=players[0];
+    const pot=potTotal(), toCall=state.currentBet-me.streetBet;
+    let v;
+    if(b.dataset.p==='min') v=+slider.min;
+    else if(b.dataset.p==='allin') v=+slider.max;
+    else {
+      const frac = b.dataset.p==='half'?0.5:1;
+      v = state.currentBet + Math.round((pot+toCall)*frac);
+    }
+    v = Math.round(Math.max(+slider.min, Math.min(+slider.max, v))/100)*100;
+    v = Math.max(+slider.min, Math.min(+slider.max, v));
+    slider.value=v; amtInput.value=v; updateRaiseBtn();
+  };
+});
+function humanTurn(){ return state.phase==='betting' && state.toAct===0; }
+
+/* ── 폴드 예약: 내 턴 아닐 때 눌러두면 턴이 왔을 때 코치평가 없이 즉시 폴드
+      (단, 콜 금액 0이면 폴드 대신 공짜 체크로 전환) ── */
+let foldReserved = false;
+
+function updateReserveBtn(){
+  const b = document.getElementById('btnReserveFold');
+  const me = players[0];
+  const show = state.phase==='betting' && state.toAct!==0 && !me.folded && !me.allIn;
+  b.style.display = show ? '' : 'none';
+  b.textContent = foldReserved ? '🚫 폴드 예약됨 — 누르면 취소' : '🚫 폴드 예약';
+  b.className = foldReserved ? 'on' : '';
+}
+document.getElementById('btnReserveFold').onclick = ()=>{
+  foldReserved = !foldReserved;
+  updateReserveBtn();
+};
+
+function pendingLabel(pd){
+  const me = players[0];
+  if(pd.type==='fold') return '폴드';
+  if(pd.type==='check') return '체크';
+  if(pd.type==='call') return '콜 '+Math.min(state.currentBet - me.streetBet, me.stack).toLocaleString();
+  return (pd.target>=me.streetBet+me.stack?'올인 ':'')+'레이즈 '+pd.target.toLocaleString();
+}
+
+// 행동 선택: 코치 자동 상의 모드면 바로 적용하지 않고 확정 대기
+function chooseAction(type, target){
+  const me = players[0];
+  const cm = document.getElementById('confirmMode');
+  if(cm.dataset.skipOnce){          // "기타(직접 선택)" 직후 한 번은 즉시 적용
+    delete cm.dataset.skipOnce;
+    hideControls();
+    applyAction(me, type, target);
+    return;
+  }
+  const useCoach = cm.checked && coachOnline;
+  if(!useCoach){
+    glog('  ★ 코치 없이 바로 실행 ('
+       + (cm.checked ? '서버 끊김' : '자동 상의 꺼짐') + ')');
+    hideControls();
+    applyAction(me, type, target);
+    return;
+  }
+  pending = { type, target };
+  ctlMain.style.display='none';
+  raiseBox.style.display='none';
+  document.getElementById('pendingText').textContent = '선택: '+pendingLabel(pending);
+  pendingBox.style.display='flex';
+  turnHint.textContent='🤔';
+  const wi = document.getElementById('whyInput');
+  wi.value = '';
+  wi.focus();
+}
+
+/* ================= 즉시 판정 (로컬 계산, 대기 0초) =================
+   측정 결과 코치 호출은 아무리 줄여도 "4.6초 + 생성토큰/95" 만큼 걸린다.
+   여러 선택지를 평가하게 하면 1,000토큰이 넘어 15~45초가 된다 — 구조적 한계다.
+   그런데 프리플랍 참여 기준은 가이드의 표대로 정해져 있고,
+   승률·팟 오즈·완성 족보는 게임이 이미 즉시 계산한다.
+   → 정해진 판정은 코드가 즉시 내리고, 코치는 '상대 읽기·내 이유 평가'만 뒤따라 맡는다. */
+
+// 가이드 "자리별 시작 패 기준(4인)"을 그대로 코드로 옮긴 것
+function chartOpenAdvice(hole, pos){
+  const hi = Math.max(hole[0].r, hole[1].r);
+  const lo = Math.min(hole[0].r, hole[1].r);
+  const suited = hole[0].s === hole[1].s;
+  const pair = hi === lo;
+  const gap = hi - lo;                       // 1이면 바로 붙은 숫자
+  const R = r => RANK_STR[r];
+  const hand = R(hi)+(suited?'':' ')+R(lo)+(suited?' (무늬 같음)':' (무늬 다름)');
+  const ok = (why)=>({open:true, hand:hand, why:why});
+  const no = (why)=>({open:false, hand:hand, why:why});
+
+  if(pair) return ok('페어는 이 자리에서 전부 오픈');
+
+  if(pos === '딜러'){
+    if(hi===14) return ok('딜러 자리는 에이스면 옆 카드 상관없이 오픈');
+    if(hi===13) return (lo>=5||suited) ? ok('딜러 자리 K는 옆 카드 5 이상 또는 무늬 같으면 오픈')
+                                       : no('딜러 자리 K라도 옆 카드가 5 미만이고 무늬도 다르면 기준 미달');
+    if(hi===12) return (lo>=8||(suited&&lo>=4)) ? ok('딜러 자리 Q는 옆 카드 8 이상(무늬 같으면 4 이상) 오픈')
+                                                : no('딜러 자리 Q 기준(옆 카드 8 이상, 무늬 같으면 4 이상) 미달');
+    if(hi===11||hi===10) return (lo>=8||(suited&&lo>=6)) ? ok('딜러 자리 J·10은 옆 카드 8 이상(무늬 같으면 6 이상) 오픈')
+                                                         : no('딜러 자리 J·10 기준(옆 카드 8 이상, 무늬 같으면 6 이상) 미달');
+    return (suited&&gap<=2) ? ok('무늬 같고 숫자 차 2 이내라 딜러 자리에서 오픈')
+         : (gap===1&&lo>=7) ? ok('바로 붙은 8·7 이상이라 딜러 자리에서 오픈')
+         : no('딜러 자리 기준(무늬 같고 숫자 차 2 이내, 또는 붙은 8·7 이상) 미달');
+  }
+  if(pos === 'SB'){
+    if(hi===14) return ok('작은 블라인드에서 에이스는 전부 오픈 (콜 말고 레이즈)');
+    if(hi===13) return (lo>=7||suited) ? ok('작은 블라인드 K는 옆 카드 7 이상 또는 무늬 같으면 오픈')
+                                       : no('작은 블라인드 K 기준(옆 카드 7 이상 또는 무늬 같음) 미달');
+    if(hi===12) return (lo>=9||(suited&&lo>=5)) ? ok('작은 블라인드 Q는 옆 카드 9 이상(무늬 같으면 5 이상) 오픈')
+                                                : no('작은 블라인드 Q 기준 미달');
+    if(hi===11) return (lo>=9||(suited&&lo>=7)) ? ok('작은 블라인드 J는 옆 카드 9 이상(무늬 같으면 7 이상) 오픈')
+                                                : no('작은 블라인드 J 기준 미달');
+    if(hi===10) return (suited&&lo>=7) ? ok('무늬 같은 10·7 이상이라 오픈')
+              : (lo===9) ? ok('10·9는 붙어 있어 오픈')
+              : no('작은 블라인드 10 기준 미달');
+    return (suited&&gap===1) ? ok('무늬 같고 바로 붙어 있어 오픈')
+                             : no('작은 블라인드에서 9 이하 조합은 무늬 같고 붙은 것만 오픈');
+  }
+  if(pos === 'UTG'){
+    if(hi===14) return (lo>=9||suited) ? ok('제일 먼저 말하는 자리에서 A는 옆 카드 9 이상 또는 무늬 같으면 오픈')
+                                       : no('제일 먼저 말하는 자리 A 기준(옆 카드 9 이상 또는 무늬 같음) 미달');
+    if(hi===13||hi===12) return (lo>=10||(suited&&lo>=9)) ? ok('이 자리 K·Q는 옆 카드 10 이상(무늬 같으면 9 이상) 오픈')
+                                                          : no('이 자리 K·Q 기준 미달');
+    if(hi===11) return (lo===10||(suited&&lo>=9)) ? ok('J는 10과 함께이거나 무늬 같은 J·9 이상만 오픈')
+                                                  : no('이 자리 J 기준 미달');
+    return (suited&&gap===1&&lo>=6) ? ok('무늬 같고 바로 붙은 7·6 이상이라 오픈')
+                                    : no('제일 먼저 말하는 자리는 가장 좁다 — 기준 미달');
+  }
+  return null;   // BB는 '오픈' 개념이 없다
+}
+
+// 이미 누가 올린 뒤의 기준 (가이드 ❺)
+function chartVsRaiseAdvice(hole){
+  const hi = Math.max(hole[0].r, hole[1].r), lo = Math.min(hole[0].r, hole[1].r);
+  const suited = hole[0].s === hole[1].s, pair = hi === lo;
+  if(pair && hi>=12) return {act:'reraise', why:'AA·KK·QQ는 되올리는 패'};
+  if(hi===14 && lo===13) return {act:'reraise', why:'A+K는 되올리는 패'};
+  if(pair && hi>=9) return {act:'call', why:'JJ·10 10·99는 콜까지'};
+  if(hi===14 && lo===12) return {act:'call', why:'A+Q는 콜까지'};
+  if(hi===14 && lo===11 && suited) return {act:'call', why:'무늬 같은 A+J는 콜까지'};
+  return {act:'fold', why:'누가 이미 올렸으면 이 기준 밖은 전부 폴드'};
+}
+
+/* 내 선택에 대한 즉시 판정문 (코치 없이 게임이 바로 만든다) */
+function localVerdict(act){
+  const me = players[0];
+  const pos = posName(me.seat);
+  const toCall = state.currentBet - me.streetBet;
+  const pot = potTotal();
+  const maxTo = me.streetBet + me.stack;
+  const L = [];
+
+  // ── 프리플랍: 가이드 표로 판정 ──
+  if(state.street === 'preflop' && me.hole.length === 2){
+    const raisedBefore = state.currentBet > BB;
+    if(raisedBefore){
+      const a = chartVsRaiseAdvice(me.hole);
+      const want = a.act==='reraise' ? '되올리기(레이즈)' : a.act==='call' ? '콜' : '폴드';
+      const mine = act.type==='raise' ? '되올리기(레이즈)' : (act.type==='fold' ? '폴드' : '콜');
+      L.push((mine===want ? '✅ 표대로다' : '⚠️ 표와 다르다') + ' — 누가 이미 올린 상황, 표 기준은 '+want);
+      L.push('· '+a.why);
+    } else {
+      const a = chartOpenAdvice(me.hole, pos);
+      if(pos === 'BB'){
+        L.push('ℹ️ 큰 블라인드는 "오픈"이 없는 자리 — 앞이 다 접으면 그냥 이긴다');
+      } else if(a){
+        const want = a.open ? '오픈(레이즈)' : '폴드';
+        const mine = act.type==='raise' ? '오픈(레이즈)' : (act.type==='fold' ? '폴드' : '콜');
+        L.push((mine===want ? '✅ 표대로다' : '⚠️ 표와 다르다') + ' — '+pos+' 자리 '+a.hand+' → 표 기준은 '+want);
+        L.push('· '+a.why);
+        if(a.open && act.type!=='raise' && act.type!=='fold'){
+          L.push('· 이 자리에서 콜로 걸치는 건 표에 없다 — 올리거나 접는 쪽이 맞다');
+        }
+      }
+      const std = roundChips(BB*3);
+      if(act.type==='raise' && a && a.open){
+        L.push('· 첫 레이즈 표준 크기는 '+std.toLocaleString()+' (강제 베팅의 3배)');
+      }
+    }
+  }
+
+  // ── 콜의 가격 (모든 스트리트 공통) ──
+  if((act.type==='call') && toCall>0){
+    const need = Math.round(toCall/(pot+toCall)*100);
+    const eq = state.myEqPct;
+    if(typeof eq === 'number'){
+      L.push((eq>=need ? '✅ 가격은 유리' : '❌ 가격부터 손해')
+        + ' — 콜 '+toCall.toLocaleString()+' 내면 '+(pot+toCall).toLocaleString()+'이 걸린 판, '
+        + '필요 승률 '+need+'% vs 내 승률 '+eq+'%');
+    }
+  }
+
+  // ── 레이즈 금액 점검 ──
+  if(act.type==='raise'){
+    const left = maxTo - act.target;
+    if(act.target < maxTo && left <= BB*3){
+      L.push('❌ 금액이 어정쩡하다 — '+act.target.toLocaleString()+'을 넣으면 '+left.toLocaleString()+'만 남는다. 올인 아니면 접는 쪽이 깔끔하다');
+    }
+    if(state.street !== 'preflop' && pot>0){
+      const half = roundChips(pot*0.5), threeQ = roundChips(pot*0.75);
+      L.push('· 플랍 이후 베팅 기준은 팟의 절반~4분의 3 = '+half.toLocaleString()+'~'+threeQ.toLocaleString());
+    }
+  }
+
+  // ── 지금 내 패 ──
+  const made = myMadeHandLabel();
+  if(made) L.push('· 지금 내 완성 족보: '+made);
+
+  return L.length ? L.join('\n') : null;
+}
+
+/* ================= 선행 분석 (내 차례 시작과 동시에 미리 물어보기) =================
+   지금까지는 내가 선택을 다 한 뒤에야 코치를 불러서, 코치가 생각하는 시간이
+   통째로 내 대기 시간이 됐다. 내 차례가 열리는 순간 미리 물어두면
+   그 시간이 내가 고민하는 시간과 겹쳐 사라진다.
+   레이즈는 금액이 무한하므로 "적정 구간 / 너무 작음 / 너무 큼 / 올인"으로 나눠 받아둔다.
+   답은 화면에 띄우지 않는다 — 먼저 보면 스스로 판단하는 학습 효과가 사라지므로. */
+let precoach = null;
+let myTurnAt = 0;      // 내 차례가 열린 시각 (고민 시간 계산용)
+
+function precoachKey(){
+  return state.handNo+'|'+state.street+'|'+state.currentBet+'|'+players[0].streetBet+'|'+alive().length;
+}
+const PRECOACH_FORMAT =
+  '\n\n지금 내 차례야. 내가 뭘 고를지 아직 말 안 했어. 선택지별 평가를 미리 다 써둬.\n' +
+  '★ 분량 제한 (엄수): 전체 답변 300자 이내. 각 근거는 딱 1줄, 한 문장. 길면 실패한 답변이다.\n' +
+  '아래 형식 그대로. 대괄호 태그는 그대로 쓰고, 태그 밖의 말은 쓰지 마.\n' +
+  '참고: 시작 패 기준표·팟 오즈·완성 족보·금액 점검은 게임 화면이 이미 계산해서 보여준다. 그건 반복하지 마.\n' +
+  '너는 "상대가 왜 그렇게 했는지"와 "그래서 뭘 해야 하는지"만 짧게 말해라.\n' +
+  '★ 분량 엄수: 전체 120자 이내. 초과하면 실패한 답변이다.\n' +
+  '아래 형식 그대로, 태그 밖의 말은 쓰지 마.\n' +
+  '[읽기]\n- 상대 행동의 의미 1줄 (성향 근거로)\n' +
+  '[추천]\n결론: <지금 가장 좋은 행동 하나. 레이즈면 금액까지>';
+
+function startPrecoach(){
+  if(!document.getElementById('confirmMode').checked) return;
+  const key = precoachKey();
+  if(precoach && precoach.key === key) return;     // 같은 상황이면 재사용
+  // 페이지를 막 열었을 땐 서버 확인이 아직 안 끝나 coachOnline이 false다.
+  // 여기서 그냥 포기하면 첫 판은 늘 선행 분석이 없다 → 확인 후 다시 시도.
+  if(!coachOnline){
+    pingCoach().then(ok=>{
+      if(ok && humanTurn() && precoachKey() === key) startPrecoach();
+    });
+    return;
+  }
+  const entry = { key: key, text: null, done: false, startedAt: Date.now() };
+  precoach = entry;
+  const t0 = entry.startedAt;
+  glog('  ⏱ 선행 분석 시작 (내가 고민하는 동안 미리 물어봄)');
+  // 컨트롤 영역에 진행 표시 — 내가 고르기 전에도 준비됐는지 알 수 있게
+  const badge = document.getElementById('preState');
+  const paint = ()=>{
+    if(!badge) return;
+    if(entry.done){
+      badge.textContent = entry.text ? '🎓 코치 분석 준비됨' : '🎓 코치 분석 실패';
+      badge.className = entry.text ? 'ready' : 'fail';
+    } else {
+      badge.textContent = '🎓 코치가 미리 분석 중… ' + Math.floor((Date.now()-t0)/1000) + '초';
+      badge.className = 'work';
+    }
+  };
+  paint();
+  const bt = setInterval(()=>{ if(precoach !== entry){ clearInterval(bt); return; } paint(); }, 500);
+  entry.promise = sendToCoach(situationText(false) + PRECOACH_FORMAT, true, true, true)
+    .then(r=>{
+      entry.text = r; entry.done = true; clearInterval(bt); paint();
+      glog('  ⏱ 선행 분석 완료 (' + ((Date.now()-t0)/1000).toFixed(1) + '초, ' + (r ? r.length+'자' : '실패') + ')');
+      return r;
+    })
+    .catch(()=>{ entry.done = true; clearInterval(bt); paint(); glog('  ⏱ 선행 분석 실패'); return null; });
+}
+
+// 미리 받아둔 답에서 내 선택에 해당하는 부분만 꺼낸다
+function pickPrecoachBlock(text, act){
+  if(!text) return null;
+  const grab = (tag)=>{
+    const m = text.match(new RegExp('\\['+tag+'\\]\\s*([\\s\\S]*?)(?=\\n\\s*\\[|$)'));
+    return m ? m[1].trim() : '';
+  };
+  // 선택지와 무관하게 상대 읽기 + 추천은 그대로 쓴다 (금액 판정은 게임이 즉시 처리)
+  const read = grab('읽기');
+  const best = grab('추천');
+  if(!read && !best) return null;
+  return [read ? '🔎 상대 읽기\n' + read : '', best].filter(Boolean).join('\n');
+}
+
+// 이유 입력 후 Enter → 코치에게 내 선택+이유 평가 요청 (빈 값도 전송)
+async function sendPendingReason(){
+  if(!pending || !humanTurn() || coachBusy) return;
+  const label = pendingLabel(pending);
+  const why = document.getElementById('whyInput').value.trim();
+  document.getElementById('whyInput').value = '';
+  logDecision(label, why);          // 내 선택 + 이유를 이번 판 기록에 남긴다
+  // ★ 대기 0초 판정 — 코치를 기다리지 않고 게임이 즉시 계산해서 먼저 보여준다
+  const lv = localVerdict(pending);
+  if(lv){ addChat('local', lv); glog('  ⚡ 즉시 판정 표시 (대기 0초)'); }
+  const thought = myTurnAt ? ((Date.now()-myTurnAt)/1000).toFixed(1) : '?';
+  glog('  ★ 내 판단: "'+label+'" / 이유: '+(why||'(안 씀)')
+     + ' / 그때 내 승률: '+((document.getElementById('equityVal')||{}).textContent||'?').trim()
+     + ' / 고민 시간 '+thought+'초');
+  addChat('user', '(자동 상의) "'+label+'" 하려고 함' + (why ? ' — 이유: '+why : ' (이유 생략)'));
+  const msg = situationText(false) +
+    '\n\n지금 내 차례야. 나는 "'+label+'"을(를) 선택하려고 해(아직 확정 전). ' +
+    (why
+      ? '내 판단 이유: "'+why+'".'
+      : '이유는 따로 안 적었어.') +
+    '\n아래 형식을 정확히 지켜서 답해 (이 형식 외의 문장 금지):' +
+    '\n1줄: "결론: <해야 할 행동, 레이즈면 금액까지>"' +
+    (why ? '\n2줄: "내 이유 평가: <맞음/틀림/틀렸지만 선택은 OK> — <한 문장>"' : '') +
+    '\n이후: 진짜 핵심 근거를 "- "로 시작하는 불릿 최대 3개, 각 한 줄.' +
+    '\n배경 설명, 확률 강의, 부가 주의사항은 쓰지 마 — 내가 되물으면 그때 설명해.';
+  // ① 미리 받아둔 분석이 이 상황 것이면 즉시 표시 (대기 0초)
+  let reply = null, fromPre = false;
+  if(precoach && precoach.key === precoachKey()){
+    const alreadyDone = precoach.done;
+    const w0 = Date.now();
+    // 멈춘 건지 도는 건지 구분되게 초를 계속 올려준다
+    let waiting = null, wtick = null;
+    if(!alreadyDone){
+      waiting = addChat('sys', '🤔 코치가 미리 분석 중 — 0초');
+      const started = precoach.startedAt || w0;
+      wtick = setInterval(()=>{
+        const s = Math.floor((Date.now()-w0)/1000);
+        const total = Math.floor((Date.now()-started)/1000);
+        waiting.textContent = '🤔 코치가 미리 분석 중 — 내가 기다린 ' + s + '초'
+          + ' (분석 시작 후 ' + total + '초째, 보통 20~45초)';
+      }, 200);
+    }
+    const text = await precoach.promise;
+    const waited = (Date.now()-w0)/1000;
+    if(wtick) clearInterval(wtick);
+    if(waiting) waiting.remove();
+    const block = pickPrecoachBlock(text, pending);
+    if(block){
+      reply = block; fromPre = true; addChat('coach', block); sndDing();
+      glog('  ✅ 선행 분석 사용 — 내가 실제로 기다린 시간 ' + waited.toFixed(1) + '초'
+         + (alreadyDone ? ' (내가 고르기 전에 이미 준비 완료)' : ' (아직 분석 중이어서 그만큼 대기)'));
+    } else {
+      glog('  ⚠ 선행 분석은 있었으나 형식이 안 맞아 새로 물어봄');
+    }
+  }
+  // ② 미리 받아둔 게 없거나 형식이 어긋났으면 기존 방식대로 지금 물어본다
+  if(!reply){
+    if(!fromPre) glog('  ↻ 선행 분석 없음 — 지금부터 물어봄(대기 발생)');
+    const w0 = Date.now();
+    reply = await sendToCoach(msg);
+    glog('  ⌛ 내가 실제로 기다린 시간: ' + ((Date.now()-w0)/1000).toFixed(1) + '초'
+       + (reply ? '' : ' (실패)'));
+  }
+
+  if(reply){
+    const m = reply.match(/^(?:최종\s*)?결론\s*[::]\s*([^\n]+)/m);
+    const d = lastDecision();
+    if(d && m) d.coachSaid = m[1].trim();
+  }
+  if(reply && pending && humanTurn()){
+    const act = parseVerdictAction(reply) || pending;
+    offerCoachAction(act);
+  }
+  // ③ 미리 받아둔 답에는 "내가 쓴 이유"에 대한 평가가 없다 → 게임을 막지 않고 뒤따라 받는다
+  if(fromPre && why && coachOnline){
+    sendToCoach(
+      '방금 그 상황에서 나는 "'+label+'"을 골랐고, 내 이유는 "'+why+'" 였어.\n' +
+      '이 "이유"가 맞는 생각인지만 짧게 평가해줘.\n' +
+      '형식: 1줄 "내 이유 평가: <맞음/틀림/틀렸지만 선택은 OK> — <한 문장>". 그 외 문장 금지.'
+    );
+  }
+}
+
+// 예약 폴드는 기다리지 않고 즉시 실행하되, 코치 평가는 사후에 받아본다
+// (게임 진행을 막지 않으므로 예약의 속도 이점은 그대로)
+async function reviewReservedFold(snapshot, toCall){
+  if(!document.getElementById('confirmMode').checked) return;
+  if(!coachOnline || coachBusy) return;
+  addChat('user', '(폴드 예약 실행) 콜 '+toCall.toLocaleString()+' 안 내고 접었음 — 이 폴드 어땠어?');
+  const msg = snapshot +
+    '\n\n나는 위 상황에서 콜에 '+toCall+'이 필요했는데, 미리 걸어둔 "폴드 예약"으로 그냥 접었어. 이미 실행됐고 되돌릴 수 없어.' +
+    '\n아래 형식을 정확히 지켜서 답해 (이 형식 외의 문장 금지):' +
+    '\n1줄: "폴드 평가: <좋은 폴드 / 무난함 / 접으면 안 됐음> — <한 문장 이유>"' +
+    '\n이후: 꼭 짚어야 할 게 있을 때만 "- "로 시작하는 한 줄 1개. 없으면 아예 쓰지 마.' +
+    '\n이미 끝난 행동이니 길게 설명하거나 강의하지 마.';
+  await sendToCoach(msg);
+}
+
+// 코치 답변의 "결론:" 줄에서 행동을 파싱
+function parseVerdictAction(reply){
+  // 결론 줄이 답변 첫 줄이 아닐 수 있다(상대 읽기가 앞에 옴) → 여러 줄 검색
+  const m = reply.match(/^(?:최종\s*)?결론\s*[::]\s*([^\n]+)/m);
+  if(!m) return null;
+  const s = m[1];
+  const me = players[0];
+  const toCall = state.currentBet - me.streetBet;
+  const maxTo = me.streetBet + me.stack;
+  if(/폴드/.test(s)) return {type:'fold', target:0};
+  if(/올인/.test(s)) return {type:'raise', target:maxTo};
+  if(/레이즈|벳/.test(s)){
+    const mm = s.replace(/[,\s]/g,'').match(/(\d{3,})/);
+    const minTo = Math.min(state.currentBet + state.minRaiseSize, maxTo);
+    let amt = mm ? +mm[1] : minTo;
+    amt = Math.max(minTo, Math.min(maxTo, amt));
+    return {type:'raise', target:amt};
+  }
+  if(/체크/.test(s)) return toCall===0 ? {type:'check', target:0} : {type:'call', target:0};
+  if(/콜/.test(s))  return toCall===0 ? {type:'check', target:0} : {type:'call', target:0};
+  return null;
+}
+
+// "코치 결론대로 실행" 버튼을 고정 슬롯(채팅 입력창 위)에 표시
+// 채팅에 넣으면 대화가 이어질 때 위로 밀려서 스크롤해야 하므로 dock에 고정
+function offerCoachAction(act){
+  const dock = document.getElementById('applyDock');
+  dock.innerHTML = '';
+  const b = document.createElement('button');
+  b.className = 'applyBtn';
+  b.textContent = '🎯 코치 결론대로 실행: ' + pendingLabel(act);
+  b.onclick = ()=>{
+    if(!humanTurn() || !pending){ clearApplyDock(); return; }
+    const d = lastDecision(); if(d) d.followed = true;   // 코치 조언 그대로 실행
+    glog('  ✔ 코치 조언 그대로 실행: ' + pendingLabel(act));
+    pending = null;
+    clearApplyDock();
+    hideControls();
+    applyAction(players[0], act.type, act.target);
+  };
+  dock.appendChild(b);
+  dock.className = 'on';
+}
+
+function clearApplyDock(){
+  const dock = document.getElementById('applyDock');
+  dock.innerHTML = '';
+  dock.className = '';
+}
+document.getElementById('whyInput').addEventListener('keydown', e=>{
+  if(e.key==='Enter') sendPendingReason();
+});
+document.getElementById('btnWhySend').onclick = sendPendingReason;
+
+btnFold.onclick =()=>{ if(humanTurn() && !pending) chooseAction('fold', 0); };
+btnCall.onclick =()=>{
+  if(!humanTurn() || pending) return;
+  const toCall = state.currentBet - players[0].streetBet;
+  chooseAction(toCall===0?'check':'call', 0);
+};
+btnRaise.onclick=()=>{
+  if(!humanTurn() || pending) return;
+  // 직접 입력값을 100원 단위로 반올림 후 최소/최대(올인)로 클램프
+  let v = Math.round((+amtInput.value || +slider.min) / 100) * 100;
+  v = Math.max(+amtInput.min, Math.min(+amtInput.max, v));
+  chooseAction('raise', v);
+};
+
+document.getElementById('btnConfirm').onclick=()=>{
+  if(!pending || !humanTurn()) return;
+  const pd = pending; pending = null;
+  // 코치가 결론을 냈는데 내가 다른 선택을 확정했다면 "안 따름"으로 기록
+  const d = lastDecision();
+  if(d && d.coachSaid && d.followed === null) d.followed = (d.choice === pendingLabel(pd));
+  glog('  ✔ 내가 확정: ' + pendingLabel(pd)
+     + (d && d.coachSaid ? ' / 코치는 "'+d.coachSaid+'" → 따름 '+(d.followed?'예':'아니오') : ' / 코치 안 부름'));
+  hideControls();
+  applyAction(players[0], pd.type, pd.target);
+};
+document.getElementById('btnRethink').onclick=()=>{
+  if(!humanTurn()) return;
+  pending = null;
+  showControls();
+};
+
+document.getElementById('btnNext').onclick=()=>startHand();
+
+// 핸드 종료 후 원클릭 전체 리뷰
+document.getElementById('btnReview').onclick = ()=>{
+  if(coachBusy) return;
+  if(!coachOnline){ addChat('sys','⚠️ 코치 서버가 꺼져 있어요.'); return; }
+  addChat('user', '(핸드 리뷰) 방금 끝난 핸드 전체를 리뷰해줘.');
+  sendToCoach(situationText(false) +
+    '\n\n방금 끝난 이 핸드 전체를 리뷰해줘. 형식 엄수:' +
+    '\n1줄: "결론: <이번 핸드 총평 한 줄>"' +
+    '\n- 잘한 것: 1~2줄' +
+    '\n- 실수: 1~2줄 (공개된 상대 패 근거로. 없으면 "없음")' +
+    '\n- 핵심 교훈: 1줄' +
+    '\n프로필의 반복 실수가 보였으면 실수 항목에 [반복]이라고 표시. 전체 8줄 이내, 그 외 설명 금지.');
+};
+
+// 판 종료 후 봇들의 속마음(액션별 판단 근거) 공개
+document.getElementById('btnThoughts').onclick = ()=>{
+  const list = state.botThoughts || [];
+  if(!list.length){ addChat('sys', '기록된 봇 속마음이 없어요.'); return; }
+  const streetKo = { preflop:'프리플랍', flop:'플랍', turn:'턴', river:'리버' };
+  let out = '🧠 봇 속마음 (핸드 #'+state.handNo+')';
+  let cur = '';
+  list.forEach(t=>{
+    if(t.street !== cur){ cur = t.street; out += '\n\n【' + streetKo[cur] + '】'; }
+    out += '\n' + t.name + ' → ' + t.act + ' : ' + t.think;
+  });
+  addChat('coach', out);
+};
+
+// 기록 꺼진 채 끝난 판을 소급 저장
+document.getElementById('btnSaveHand').onclick = ()=>{
+  if(!state.lastRec) return;
+  commitHandRecord(state.lastRec);
+  state.lastRec = null;
+  document.getElementById('btnSaveHand').style.display='none';
+};
+
+/* ================= 상황 복사 ================= */
+// 내 현재 완성 족보 (홀카드 + 보드 3~5장에서 최고 5장 조합)
+// 코치(LLM)가 무늬·숫자를 직접 대조하다 실수하는 걸 막기 위해 엔진 판정을 상황에 첨부
+function myMadeHandLabel(){
+  const me = players[0];
+  if(!me.hole || me.hole.length < 2 || state.board.length < 3) return null;
+  const cs = me.hole.concat(state.board);
+  const n = cs.length;
+  let best = null;
+  for(let a=0;a<n-4;a++)for(let b=a+1;b<n-3;b++)for(let c=b+1;c<n-2;c++)
+  for(let d=c+1;d<n-1;d++)for(let e=d+1;e<n;e++){
+    const v = evaluate5([cs[a],cs[b],cs[c],cs[d],cs[e]]);
+    if(!best || cmpEval(v,best)>0) best = v;
+  }
+  return best ? handLabel(best) : null;
+}
+
+function situationText(includePrompt){
+  const me=players[0];
+  const lines=[];
+  lines.push('【홀덤 연습 - 핸드 #'+state.handNo+'】 4인 테이블, 블라인드 '+SB+'/'+BB);
+  lines.push('상대 성향: 예송=프로급 고수(타이트-어그레시브), 장송=초보(10시간+)로 신중한 편(좋은 핸드 위주, 블러프 드묾), 병송=초보(10시간+)로 참여 많고 공격적(루즈-어그레시브), 약 15% 확률로 이유 없는 오버벳/올인 폭주. 셋 다 체크=약함 정도의 기본 심리는 읽음');
+  lines.push('');
+  lines.push(...state.history);
+  if(state.phase==='betting'){
+    lines.push('');
+    lines.push('▶ 현재 상황:');
+    lines.push('보드: '+(state.board.length?state.board.map(cardStr).join(' '):'(프리플랍)'));
+    if(me.hole && me.hole.length===2 && !me.folded){
+      lines.push('내 패: '+me.hole.map(cardStr).join(' '));
+      const made = myMadeHandLabel();
+      if(made) lines.push('★ 내 현재 완성 족보 = '+made+' (게임 엔진이 자동 판정한 확정값 — 카드를 직접 대조해서 다시 계산하지 말고 반드시 이 값을 기준으로 판단해)');
+    }
+    lines.push('팟: '+potTotal());
+    players.forEach(p=>{
+      lines.push('  '+p.name+'('+posName(p.seat)+'): 스택 '+p.stack+
+        (p.folded?' [폴드]': p.allIn?' [올인]':'')+
+        (p.streetBet?' / 이번 스트리트 베팅 '+p.streetBet:''));
+    });
+    if(state.toAct===0){
+      const toCall=state.currentBet-me.streetBet;
+      lines.push('지금 내 차례. '+(toCall>0?'콜 하려면 '+toCall+' 필요.':'체크 가능.'));
+    }
+    if(includePrompt){
+      lines.push('');
+      lines.push('질문: 지금까지 상대들의 액션을 어떻게 읽어야 할까? 나는 여기서 어떤 플레이를 하는 게 좋을까? 이유와 함께 알려줘.');
+    }
+  }
+  return lines.join('\n');
+}
+function copyText(t){
+  const toast=document.getElementById('copyToast');
+  const done=()=>{ toast.textContent='✅ 복사됨! Claude 채팅에 붙여넣으세요.'; setTimeout(()=>toast.textContent='',2500); };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(t).then(done).catch(()=>fallback());
+  } else fallback();
+  function fallback(){
+    const ta=document.createElement('textarea');
+    ta.value=t; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); ta.remove(); done();
+  }
+}
+document.getElementById('btnCopyNow').onclick =()=>copyText(situationText(true));
+
+/* ================= 로컬 DB (핸드 기록) ================= */
+// 모바일에서 접속해도 서버(PC)를 바라보도록 현재 접속 호스트 기준으로 주소 계산
+const HOST = (location.protocol.indexOf('http') === 0 && location.hostname) ? location.hostname : 'localhost';
+// 기록 서버(8770)는 인증이 없어서 인터넷에 직접 열지 않는다.
+// 원격 접속일 때는 코치 서버(8765)의 /db 중계를 통해서만 접근 (집 localhost에서는 기존처럼 직접)
+const DB_URL = (HOST === 'localhost' || HOST === '127.0.0.1')
+  ? 'http://' + HOST + ':8770'
+  : 'http://' + HOST + ':8765/db';
+function buildHandRecord(){
+  const me = players[0];
+  const start = (state.handStartStacks && state.handStartStacks[0]) || START_STACK;
+  return {
+    hand: state.handNo,
+    myCards: me.hole.map(cardStr).join(' '),
+    board: state.board.map(cardStr).join(' '),
+    winners: players.filter(p=>p.isWinner).map(p=>p.name),
+    iWon: !!me.isWinner,
+    iFolded: me.folded,
+    myStackAfter: me.stack,
+    profit: me.stack - start,                 // 이 판에서 딴/잃은 금액
+    history: state.history.join('\n'),
+    botThoughts: (state.botThoughts||[]).map(t=>'['+t.street+'] '+t.name+' '+t.act+': '+t.think).join('\n'),
+    // ── 반복 실수를 찾으려면 "무엇을 했나"보다 "왜 그렇게 생각했나"가 필요하다 ──
+    decisions: (state.decisions||[]).map(d=>
+      '[' + d.street + '] 내 선택: ' + d.choice +
+      ' / 그때 내 승률 ' + d.equity +
+      (d.reason ? ' / 내 이유: "' + d.reason + '"' : ' / 이유 안 씀') +
+      (d.coachSaid ? ' / 코치 결론: ' + d.coachSaid : '') +
+      (d.coachSaid ? ' / 조언 따름: ' + (d.followed ? '예' : '아니오') : '')
+    ).join('\n'),
+  };
+}
+
+/* 이번 판의 내 판단 기록 (이유·코치 조언·따랐는지) */
+function logDecision(choice, reason){
+  if(!state.decisions) state.decisions = [];
+  const eq = document.getElementById('equityVal');
+  state.decisions.push({
+    street: state.street,
+    choice: choice,
+    reason: reason || '',
+    equity: eq ? (eq.textContent || '?').trim() : '?',
+    coachSaid: '',
+    followed: null,
+  });
+}
+function lastDecision(){
+  const d = state.decisions;
+  return (d && d.length) ? d[d.length-1] : null;
+}
+// 핸드 기록 확정 저장: DB 기록 + 판수 누적 + 10판마다 코칭 노트 갱신
+function commitHandRecord(rec){
+  const hdr = { method:'POST', headers:{'Content-Type':'application/json'} };
+  fetch(DB_URL + '/append', Object.assign({}, hdr, {
+    body: JSON.stringify({ ns:'holdem', log:'hands', data:rec }),
+  })).catch(()=>{});
+  handsDone++;
+  fetch(DB_URL + '/set', Object.assign({}, hdr, {
+    body: JSON.stringify({ ns:'holdem', key:'handsDone', value: handsDone }),
+  })).catch(()=>{});
+  addChat('sys', '💾 이번 판 기록됨 (누적 '+handsDone+'판'+(handsDone % PROFILE_EVERY === 0 ? ' — 코칭 노트 자동 갱신' : '')+')');
+  if(coachOnline && handsDone % PROFILE_EVERY === 0) updateProfile();
+}
+
+/* ================= Claude 코치 채팅 ================= */
+const COACH_URL = 'http://' + HOST + ':8765';
+
+/* 전체 타임라인 로그 — 서버의 game-log.txt에 시간순으로 쌓인다.
+   나중에 이 파일 하나로 "왜 느린지"와 "코칭이 맞았는지"를 둘 다 검증한다. */
+function glog(text){
+  // 시각은 '이벤트가 실제로 일어난 브라우저 시점'으로 찍는다.
+  // 서버 도착 시각으로 찍으면 비동기 전송이 밀릴 때 타임라인 순서가 어긋난다.
+  const d = new Date();
+  const p2 = n => (n<10?'0':'')+n;
+  const p3 = n => (n<100?(n<10?'00':'0'):'')+n;
+  const t = p2(d.getHours())+':'+p2(d.getMinutes())+':'+p2(d.getSeconds())+'.'+p3(d.getMilliseconds());
+  fetch(COACH_URL + '/gamelog', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ text: text, t: t }),
+  }).catch(()=>{});
+}
+const PRIME_TEXT =
+  '너는 텍사스 홀덤 코치야. 나는 4인 테이블(시작 스택 10,000, 블라인드 100/200)에서 연습 중이고 상대는 봇 3명이야: ' +
+  '예송=프로급 고수(대회 우승 경력 수준, 타이트-어그레시브), ' +
+  '장송=초보(10시간 정도 경험)로 신중한 편. 좋은 핸드 위주로 참여하고 블러프는 드물지만 아예 없진 않음, ' +
+  '병송=초보(10시간 정도 경험). 카드를 보고 판단하긴 하지만 참여가 많은 루즈-어그레시브 스타일이고, 대략 15% 확률로 카드와 무관한 오버벳/올인 폭주가 섞임. ' +
+  '주의: 셋 다 기본적인 심리는 읽을 줄 알아 — 예를 들어 상대가 체크하면 약하다고 보고 찔러보는 정도는 초보들도 다 해. 초보 상대라고 심리전이 아예 안 통한다고 단정하지 마. ' +
+  '앞으로 게임 상황(핸드 히스토리)과 질문을 보낼 테니, 상대 액션의 의미를 성향에 맞게 읽어주고 ' +
+  '내가 어떤 플레이를 해야 할지 이유와 함께 한국어로 간결하게(핵심 위주로) 코칭해줘. ' +
+  '핸드가 끝난 후 히스토리를 보내면 내 플레이를 리뷰해줘. ' +
+  '반복 실수 교정 (조건부): 이 대화에 "코칭 노트"가 실제로 첨부돼 있고 거기 적힌 실수 패턴이 다시 보일 때만 짚어줘. ' +
+  '그때는 "이 버릇이 또 나왔다"고 말하고, 왜 잘못된 생각인지와 대신 어떤 순서로 판단해야 하는지를 구체적으로 교정해줘. ' +
+  '절대 금지 — 근거 없는 과거 언급: 코칭 노트가 없거나 그 내용에 없는 습관을 "전에도 그랬다", "늘 그러더라", "그 버릇이 또" 라고 말하지 마. ' +
+  '나에 대해 아는 게 없으면 그냥 이번 판만 보고 말해. 지어내지 말고, 확실하지 않으면 "모르겠다"고 해. ' +
+  '평가 원칙: 내 판단이 맞으면 명확하게 "맞다"고 인정해줘. 억지로 흠을 찾아내려 하지 말고, 지적할 게 없으면 없다고 말해. 잘한 판단을 잘했다고 확인받는 것도 중요한 학습이야. ' +
+  '베팅 금액 점검 (필수): 내가 레이즈 금액을 말하면 그 돈을 넣고 "남는 스택"을 반드시 계산해봐. ' +
+  '거의 다 넣고 조금만 남는 어정쩡한 금액이면(예: 스택 10,000에 9,000 레이즈 → 1,000 남음) 그걸 먼저 지적하고 ' +
+  '"올인 아니면 폴드"처럼 깔끔한 선택지를 제시해. ' +
+  '눈높이 (다른 어떤 지시보다 우선): 나는 홀덤 완전 초보야. 포커 잘 치는 동네 형이 옆에서 봐주듯 일상적인 말로만 설명해. ' +
+  '아래는 반드시 지켜야 하는 말투 규칙이야. 하나라도 어기면 실패한 답변이다.\n' +
+  '1) 비율 표기 금지: "5:1", "3:1" 같은 표기 쓰지 마. 대신 "5번 중 1번만 이겨도 본전"처럼 횟수로 말해.\n' +
+  '2) 핸드 축약 표기 금지: "Q3o", "AKs", "72o" 쓰지 마. 화면에 보이는 그대로 "Q♦ 3♠ (무늬 다름)"처럼 써.\n' +
+  '3) 자리 약어는 풀어써: "SB"→"작은 블라인드 자리", "BB"→"큰 블라인드 자리", "UTG"→"제일 먼저 말해야 하는 자리", "BTN"→"딜러 자리".\n' +
+  '4) 포커판 은어 금지: "완성", "표준", "밸런스", "EV", "GTO", "레인지가 넓다/좁다" 같은 말 대신 뜻을 그대로 풀어 써 ' +
+  '(예: "레인지가 넓다" → "쟤는 약한 패로도 이렇게 올리는 편이다").\n' +
+  '5) 용어는 한 답변에 최대 2개. 쓸 땐 바로 뒤 괄호에 쉬운 말 (예: "팟 오즈(지금 콜 값이 싼지 비싼지)"). 용어 없이 말할 수 있으면 아예 쓰지 마.\n' +
+  '6) 숫자는 항상 이 판의 실제 금액으로 풀어서. 예: "콜 100 내면 팟 500을 노리는 거라, 5번 중 1번만 이겨도 손해는 아니야."\n' +
+  '7) 한 문장은 짧게. 두 줄 넘어가면 끊어.\n' +
+  '나쁜 예(절대 이렇게 쓰지 마): "팟 오즈가 매우 좋다 (콜 100에 팟 500 = 5:1, 17%만 이기면 본전). Q3o는 약하지만 이 가격이면 SB 완성은 표준이다."\n' +
+  '좋은 예: "콜하자. 100만 더 내면 500이 걸린 판을 볼 수 있어. 5번 중 1번만 이겨도 본전이라 싸다. 패는 Q♦ 3♠로 약하지만, 이 값이면 한 장 더 봐도 괜찮아."\n' +
+  '단, 내 코칭 노트에 "현재 이해 수준"이 기록되어 있으면 그 수준에 맞춰 조절해 — 이미 이해한 개념은 풀어쓰지 말고 바로 써도 돼. ' +
+  '용어를 쓸 때는 화면 용어집과 같은 표기로: 플랍(플롭 아님), 턴, 리버, 씨벳, 3벳, 콜드콜, 밸류벳, 블러프, 팟 오즈, 임플라이드 오즈, 레인지, 키커. ' +
+  '시작 패 기준: 화면 가이드에 "자리별 시작 패 기준(4인)" 표가 있고 나는 그걸 보고 배운다. ' +
+  '프리플랍 조언은 그 기준과 어긋나지 않게 해라 — 딜러 자리는 페어 전부·A 전부·K는 옆 카드 5 이상, ' +
+  '작은 블라인드는 콜 없이 레이즈 아니면 폴드, 큰 블라인드는 오픈 개념이 없고 지킬지만 정한다, ' +
+  '제일 먼저 말하는 자리는 가장 좁게. 누가 이미 올렸으면 훨씬 좁혀야 한다. ' +
+  '기준과 다른 조언을 할 거면 "표에는 X지만 지금은 Y라서 다르게 본다"고 이유를 밝혀라. ' +
+  '"~같은 것", "~처럼" 식의 뭉뚱그린 예시 금지 — 어떤 패를 열고 어떤 패를 접는지 숫자로 딱 잘라 말해라. ' +
+  '일관성 검사 (필수): 결론과 근거가 어긋나면 그 답변은 실패다. 근거를 다 쓴 뒤 결론과 맞는지 반드시 다시 확인해라. ' +
+  '근거가 다른 행동을 가리키면 결론을 그 행동으로 바꿔서 내보내라. ' +
+  '예: "결론: 폴드"라고 써놓고 근거에 "접는 건 아깝다", "너무 타이트하다"처럼 반대되는 말을 쓰면 절대 안 된다. ' +
+  '접으라고 할 거면 근거도 접어야 하는 이유만 써라. ' +
+  '분량 (엄수): 답변은 250자 이내. 답이 길수록 내가 기다리는 시간이 그대로 늘어난다 — 짧게 쓰는 게 곧 좋은 코칭이다. ' +
+  '답변 스타일 (매우 중요): 장황하게 쓰지 마. 결론을 첫 줄에 먼저 말하고, 핵심 근거는 최대 3개까지만 한 줄씩. ' +
+  '평가 과정을 나열하지 말고 결과만 말해. 배경 설명이나 부가 주의사항은 내가 되물을 때만 해. ' +
+  '"결과적으로 괜찮음" 같은 말을 쓸 땐 반드시 왜 괜찮은지 실질 근거를 같이 말해. 한 문장마다 줄바꿈.';
+
+const chatMsgs = document.getElementById('chatMsgs');
+const chatInput = document.getElementById('chatInput');
+const coachState = document.getElementById('coachState');
+let coachPrimed = false, coachBusy = false, coachOnline = false;
+
+function addChat(cls, text){
+  const d = document.createElement('div');
+  d.className = 'cmsg ' + cls;
+  if(cls === 'coach'){
+    let html = linkTerms(text);   // 용어에 밑줄 연동
+    // "결론:" 첫 줄은 눈에 띄게 강조
+    html = html.replace(/^((?:최종\s*)?결론\s*[::][^\n]*)/m, '<span class="verdict">$1</span>');
+    d.innerHTML = html;
+  }
+  else d.textContent = text;
+  chatMsgs.appendChild(d);
+  chatMsgs.scrollTop = chatMsgs.scrollHeight;
+  // 모바일 서랍 손잡이: 최근 메시지 미리보기 + 새 답변 배지
+  const pv = document.getElementById('chatPreview');
+  if(pv) pv.textContent = text.replace(/\s+/g, ' ').slice(0, 44);
+  if(cls === 'coach'){
+    const sideEl = document.getElementById('side');
+    if(sideEl && !sideEl.classList.contains('open')){
+      const b = document.getElementById('chatBadge');
+      if(b) b.classList.add('show');
+    }
+  }
+  return d;
+}
+
+// 새 판 시작 시 이전 판 대화를 접힌 폴더로 정리
+// 폴더가 판수만큼 쌓여 자리를 차지하지 않게, 최근 3판만 밖에 두고
+// 나머지는 맨 위의 보관함 하나로 몰아넣는다
+function collapseOldChat(){
+  const KEEP = 3;
+  let archive = document.getElementById('chatArchive');
+  const kids = [...chatMsgs.childNodes];
+  const olds = [], fresh = [];
+  kids.forEach(n=>{
+    if(n.nodeType === 1 && n.id === 'chatArchive') return;
+    if(n.nodeType === 1 && n.classList && n.classList.contains('oldChat')) olds.push(n);
+    else fresh.push(n);
+  });
+  if(!fresh.length) return;
+
+  // 방금 끝난 판 대화 → 접힌 폴더로
+  const det = document.createElement('details');
+  det.className = 'oldChat';
+  const sum = document.createElement('summary');
+  sum.textContent = '📁 지난 판 대화 (핸드 #' + (state.handNo - 1) + ')';
+  det.appendChild(sum);
+  fresh.forEach(f=>det.appendChild(f));
+  olds.push(det);
+
+  // 오래된 폴더는 보관함으로 이동
+  const cut = Math.max(0, olds.length - KEEP);
+  const toArchive = olds.slice(0, cut);
+  const visible = olds.slice(cut);
+  if(toArchive.length){
+    if(!archive){
+      archive = document.createElement('details');
+      archive.id = 'chatArchive';
+      archive.className = 'oldChat';
+      archive.appendChild(document.createElement('summary'));
+    }
+    toArchive.forEach(o=>{ o.open = false; archive.appendChild(o); });
+    const cnt = archive.querySelectorAll('.oldChat').length;
+    archive.querySelector('summary').textContent = '🗃 오래된 판 대화 보관함 (' + cnt + '판)';
+  }
+
+  chatMsgs.innerHTML = '';
+  if(archive) chatMsgs.appendChild(archive);
+  visible.forEach(o=>chatMsgs.appendChild(o));
+  chatMsgs.scrollTop = chatMsgs.scrollHeight;
+}
+
+// 모바일 채팅 서랍 열기/닫기 (손잡이 탭 또는 어두워진 바깥 탭으로 닫기)
+function setDrawer(open){
+  const s = document.getElementById('side');
+  s.classList.toggle('open', open);
+  document.getElementById('dim').classList.toggle('show', open);
+  document.getElementById('chatArrow').textContent = open ? '▼ 닫기' : '▲';
+  if(open){
+    document.getElementById('chatBadge').classList.remove('show');
+    chatMsgs.scrollTop = chatMsgs.scrollHeight;
+  }
+}
+document.getElementById('chatHandle').onclick = ()=>{
+  setDrawer(!document.getElementById('side').classList.contains('open'));
+};
+// 어두운 배경 탭 → 열려 있는 서랍(코치·가이드) 모두 닫기
+document.getElementById('dim').onclick = ()=>{
+  setDrawer(false);
+  if(typeof setRef === 'function') setRef(false);
+};
+
+// 모바일: 사운드 컨트롤 팝오버 토글
+document.getElementById('sndToggle').onclick = ()=>{
+  document.getElementById('sndGroup').classList.toggle('open');
+};
+
+/* ===== 코치 답변 속 용어 ↔ 왼쪽 설명 패널 연동 ===== */
+const termMap = new Map();
+let termRegex = null;
+function buildTermMap(){
+  const skip = new Set(['있다','없다','최상']);
+  document.querySelectorAll('#ref b').forEach(b=>{
+    const raw = b.textContent.trim();
+    const aliases = new Set();
+    raw.split('/').forEach(part=>{
+      part = part.trim();
+      const noParen = part.replace(/\(.*?\)/g,'').trim();
+      if(noParen) aliases.add(noParen);
+      const m = part.match(/\((.*?)\)/);
+      if(m) m[1].split(',').forEach(x=>{ x=x.trim(); if(x) aliases.add(x); });
+    });
+    aliases.forEach(a=>{
+      if(a.length < 2 || skip.has(a) || /^[0-9약 %~.]+$/.test(a)) return;
+      if(!termMap.has(a)) termMap.set(a, b);
+    });
+  });
+  // 코치가 다른 표기를 써도 밑줄이 걸리도록 별칭 등록 (별칭 → 화면 용어)
+  const alias = {
+    '플롭':'플랍', '플럽':'플랍',
+    '리레이즈':'3벳', '쓰리벳':'3벳', '포벳':'3벳',
+    'C벳':'씨벳', 'c벳':'씨벳', '컨티뉴에이션 벳':'씨벳',
+    '밸류베팅':'밸류벳', '블러핑':'블러프', '숏스텍':'숏스택',
+  };
+  Object.keys(alias).forEach(a=>{
+    const target = termMap.get(alias[a]);
+    if(target && !termMap.has(a)) termMap.set(a, target);
+  });
+  const list = [...termMap.keys()]
+    .sort((a,b)=>b.length-a.length)
+    .map(a=>a.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'));
+  termRegex = list.length ? new RegExp('('+list.join('|')+')','g') : null;
+}
+function escapeHtml(s){
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function linkTerms(text){
+  const esc = escapeHtml(text);
+  if(!termRegex) return esc;
+  return esc.replace(termRegex, m=>'<u class="term">'+m+'</u>');
+}
+// 용어의 정의 텍스트 추출 (<b>용어</b>: 설명 ... <br> 구조에서)
+function termDefinition(b){
+  let out = '';
+  let n = b.nextSibling;
+  while(n){
+    if(n.nodeName === 'BR') break;
+    out += n.textContent || '';
+    n = n.nextSibling;
+  }
+  return out.replace(/^\s*[::]\s*/, '').trim();
+}
+chatMsgs.addEventListener('click', e=>{
+  const t = e.target.closest('u.term');
+  if(!t) return;
+  const el = termMap.get(t.textContent);
+  if(!el) return;
+  // 가이드가 "열려 있을 때"만 패널로 안내한다.
+  // (서랍이라 닫혀 있어도 DOM에는 존재 → offsetParent로 판단하면 안 됨)
+  const refOpen = document.getElementById('ref').classList.contains('open');
+  if(refOpen){
+    el.scrollIntoView({behavior:'smooth', block:'center'});
+    el.classList.add('refFlash');
+    setTimeout(()=>el.classList.remove('refFlash'), 1800);
+    return;
+  }
+  // 닫혀 있으면 클릭한 자리 옆에 설명 팝업
+  const pop = document.getElementById('termPop');
+  const def = termDefinition(el);
+  pop.innerHTML = '<b>' + escapeHtml(el.textContent) + '</b>: ' +
+    escapeHtml(def || '(설명은 📚 가이드에서 확인)') +
+    '<span class="closeHint">아무 곳이나 누르면 닫힘 · 📚 가이드에서 전체 보기</span>';
+  pop.classList.add('show');
+  // 화면 밖으로 나가지 않게 클릭 지점 기준으로 위치 보정
+  const r = t.getBoundingClientRect();
+  const pw = pop.offsetWidth, ph = pop.offsetHeight;
+  let left = r.left - pw - 12;                    // 기본: 용어 왼쪽(코치 패널이 오른쪽이므로)
+  if(left < 10) left = Math.min(r.right + 12, window.innerWidth - pw - 10);
+  let top = r.top - 6;
+  if(top + ph > window.innerHeight - 10) top = window.innerHeight - ph - 10;
+  if(top < 10) top = 10;
+  pop.style.left = left + 'px';
+  pop.style.top  = top + 'px';
+});
+// 팝업 자체 또는 바깥 아무 곳이나 클릭하면 닫힘
+document.addEventListener('click', e=>{
+  const pop = document.getElementById('termPop');
+  if(!pop.classList.contains('show')) return;
+  if(e.target.closest('u.term')) return;   // 방금 연 클릭은 무시
+  pop.classList.remove('show');
+});
+buildTermMap();
+
+async function pingCoach(){
+  try{
+    const r = await fetch(COACH_URL + '/ping');
+    if((await r.json()).ok){
+      coachOnline = true;
+      coachState.textContent = '(연결됨 ✅)';
+      coachState.style.color = '#8fd08f';
+      return true;
+    }
+  }catch(e){}
+  coachOnline = false;
+  coachState.textContent = '(서버 꺼짐 — 홀덤시작.bat 실행)';
+  coachState.style.color = '#d0908f';
+  return false;
+}
+
+// 코치 상의 중에는 코치를 부르는 버튼들을 눌리지 않게 잠금
+function syncCoachButtons(){
+  const busy = coachBusy;
+  const whyBtn = document.getElementById('btnWhySend');
+  whyBtn.disabled = busy;
+  whyBtn.textContent = busy ? '⏳ 상의 중...' : '🎓 코치평가';
+  ['btnChatSend','btnReview','btnThoughts'].forEach(id=>{
+    const b = document.getElementById(id);
+    if(b) b.disabled = busy;
+  });
+}
+
+// 코치에게 메시지 전송 (첫 메시지에 역할 설명 자동 포함). 답변 텍스트를 반환.
+// silent=true 면 답변 원문을 말풍선으로 표시하지 않음 (버튼 등으로 가공해 보여줄 때)
+// quiet=true : 화면에 아무 흔적도 남기지 않고 백그라운드로 호출 (선행 분석용)
+// fast=true  : 빠른 모델 + 생각 최소화 (미리 돌려두는 기계적 호출 전용)
+async function sendToCoach(fullMsg, silent, quiet, fast){
+  if(!coachPrimed) fullMsg = PRIME_TEXT + '\n\n' + fullMsg;
+  if(!quiet){ coachBusy = true; syncCoachButtons(); }
+  const wait = quiet ? { textContent:'', remove(){} }
+                     : addChat('sys', '🤔 코치가 생각 중... (0초)');
+  // 경과 시간 표시: 숫자가 올라가면 정상 대기 중, 멈추면 페이지 문제
+  const t0 = Date.now();
+  const tick = setInterval(()=>{
+    const s = Math.floor((Date.now() - t0) / 1000);
+    if(s >= 90){
+      wait.textContent = '⚠️ 평소(10~60초)보다 오래 걸리고 있어요 ('+s+'초) — 코치 서버 창에 오류가 없는지 확인해보세요. 3분이 되면 자동 취소됩니다.';
+    } else if(s >= 30){
+      wait.textContent = '🤔 코치가 생각 중... ('+s+'초) — 보통 1분 안에 답해요';
+    } else {
+      wait.textContent = '🤔 코치가 생각 중... ('+s+'초)';
+    }
+  }, 1000);
+  // 3분 넘으면 자동 취소 (진짜 멈춘 경우 다시 시도할 수 있게)
+  const ctrl = new AbortController();
+  const killer = setTimeout(()=>ctrl.abort(), 180000);
+  try{
+    // 1) 티켓 발급 (서버는 즉시 응답하고 Claude는 백그라운드에서 실행)
+    const r = await fetch(COACH_URL + '/chat', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        message: fullMsg,
+        model: document.getElementById('coachModelSel').value,
+        fast: !!fast,
+      }),
+      signal: ctrl.signal,
+    });
+    const tk = await r.json();
+    if(!tk.ticket) throw new Error(tk.reply || 'no ticket');
+    // 2) 2초마다 결과 확인
+    const j = await pollCoachResult(tk.ticket, ctrl.signal);
+    wait.remove();
+    if(j.ok){
+      sndDing();   // 답변 도착 알림음
+      if(!silent) addChat('coach', j.reply || '(빈 응답)');
+      coachPrimed = true;
+      return j.reply || '';
+    }
+    glog('  ❌ 코치 호출 실패: ' + (j.reply || '(사유 없음)').slice(0,120));
+    if(!quiet) addChat('sys', '⚠️ ' + (j.reply || '코치 호출에 실패했어요. 다시 시도해보세요.'));
+    return null;
+  }catch(e){
+    wait.remove();
+    glog('  ❌ 코치 연결 오류: ' + (e && e.name === 'AbortError' ? '3분 초과로 취소' : '서버에 연결 못 함'));
+    if(!quiet){
+      if(e.name === 'AbortError'){
+        addChat('sys', '⏱ 3분이 지나 요청을 취소했어요. 코치 서버가 멈췄을 수 있으니 서버 창을 확인하고, 다시 질문해보세요.');
+      } else {
+        addChat('sys', '⚠️ 코치 서버에 연결하지 못했어요. 게임 폴더의 "홀덤시작.bat"을 실행한 뒤 다시 시도하세요.');
+      }
+      pingCoach();
+    }
+    return null;
+  } finally {
+    clearInterval(tick);
+    clearTimeout(killer);
+    if(!quiet){ coachBusy = false; syncCoachButtons(); }
+  }
+}
+
+// 티켓 결과를 0.5초 간격으로 폴링
+async function pollCoachResult(ticket, signal){
+  while(true){
+    await new Promise(r=>setTimeout(r, 500));
+    const r = await fetch(COACH_URL + '/result?id=' + ticket, {signal});
+    const j = await r.json();
+    if(j.done) return j;
+  }
+}
+
+async function sendChat(){
+  const q = chatInput.value.trim();
+  if(!q || coachBusy) return;
+  chatInput.value = '';
+  addChat('user', q);
+  let msg = q;
+  if(document.getElementById('attachState').checked){
+    msg = situationText(false) + '\n\n내 질문: ' + q;
+  }
+  await sendToCoach(msg);
+}
+
+// 저장된 핸드 기록을 노트 갱신용 텍스트로 (기록해두고 안 쓰면 근거 없는 노트가 된다)
+async function recentHandsText(n){
+  try{
+    const r = await fetch(DB_URL + '/log?ns=holdem&log=hands&tail=' + n);
+    const rows = await r.json();
+    if(!Array.isArray(rows) || !rows.length) return '';
+    return rows.map(function(x){
+      const d = x.data || x;
+      return '── 핸드 #' + d.hand + ' ──\n'
+        + '내 카드: ' + d.myCards + ' / 보드: ' + (d.board || '(폴드로 끝)') + '\n'
+        + '결과: ' + (d.iWon ? '승리' : (d.iFolded ? '폴드' : '패배'))
+        + (typeof d.profit === 'number' ? ' (' + (d.profit>=0?'+':'') + d.profit.toLocaleString() + ')' : '') + '\n'
+        + (d.decisions ? '내 판단:\n' + d.decisions + '\n' : '')
+        + '진행:\n' + (d.history || '');
+    }).join('\n\n');
+  }catch(e){ return ''; }
+}
+
+// 플레이어 프로필: 갱신 요청 / 조회
+async function updateProfile(){
+  if(coachBusy) return;
+  coachBusy = true;
+  const wait = addChat('sys', '📒 코치가 코칭 노트를 갱신하는 중...');
+  try{
+    const hands = await recentHandsText(PROFILE_EVERY * 2);
+    const r = await fetch(COACH_URL + '/profile-update', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ hands: hands }),
+    });
+    const tk = await r.json();
+    if(!tk.ticket) throw new Error('no ticket');
+    const j = await pollCoachResult(tk.ticket);
+    wait.remove();
+    addChat('sys', j.ok ? '📒 코칭 노트 갱신 완료 — 아래 [🧰 도구]의 [📒 코칭 노트 보기]로 확인하세요.'
+                        : '⚠️ 노트 갱신 보류: ' + (j.reply || '관찰 데이터가 아직 부족해요. 몇 판 더 플레이하고 코치와 대화해보세요.'));
+    if(j.ok && j.profile){
+      // 로컬 DB에도 저장: 최신본(profile 키) + 변화 이력(profiles 로그)
+      const hdr = {method:'POST', headers:{'Content-Type':'application/json'}};
+      fetch(DB_URL+'/set', Object.assign({}, hdr, {body: JSON.stringify({ns:'holdem', key:'profile', value:{updated:new Date().toLocaleString(), text:j.profile}})})).catch(()=>{});
+      fetch(DB_URL+'/append', Object.assign({}, hdr, {body: JSON.stringify({ns:'holdem', log:'profiles', data:{hand:state.handNo, text:j.profile}})})).catch(()=>{});
+    }
+  }catch(e){
+    wait.remove();
+    addChat('sys', '⚠️ 코칭 노트 갱신 실패 (서버 연결 확인)');
+  }
+  coachBusy = false;
+}
+
+document.getElementById('btnProfile').onclick = async ()=>{
+  try{
+    const r = await fetch(COACH_URL + '/profile');
+    const j = await r.json();
+    addChat('coach', (j.profile && j.profile.trim())
+      ? j.profile
+      : '아직 코칭 노트가 없어요. 몇 판 플레이하며 코치와 대화한 뒤 [✍ 노트 지금 갱신]을 눌러보세요. (📝 데이터 기록이 켜져 있으면 10판마다 자동 갱신됩니다)');
+  }catch(e){
+    addChat('sys', '⚠️ 서버에 연결할 수 없어요.');
+  }
+};
+document.getElementById('btnProfileUpd').onclick = ()=>{
+  if(!coachOnline){ addChat('sys','⚠️ 코치 서버가 꺼져 있어요.'); return; }
+  if(!coachBusy) updateProfile();
+};
+
+document.getElementById('btnChatSend').onclick = sendChat;
+chatInput.addEventListener('keydown', e=>{ if(e.key==='Enter') sendChat(); });
+pingCoach();
+setInterval(pingCoach, 30000);
+// (안내문은 자리만 차지해서 제거 — 사용법은 화면 버튼으로 충분)
+
+/* ================= 좁은 화면용 가이드 패널 토글 ================= */
+// 넓은 화면: 가이드를 아예 접었다 펴기(테이블이 그만큼 넓어짐, 선택 유지)
+// 좁은 화면(≤1350): 기존대로 오버레이로 열고 닫기
+// 가이드는 어느 화면에서든 "덮어서 여는 서랍" — 테이블 폭을 상시로 뺏지 않는다
+function setRef(open){
+  document.getElementById('ref').classList.toggle('open', open);
+  document.getElementById('dim').classList.toggle('show', open);
+  document.getElementById('refToggle').textContent = open ? '📚 가이드 닫기' : '📚 가이드';
+}
+document.getElementById('refToggle').onclick = ()=>{
+  setRef(!document.getElementById('ref').classList.contains('open'));
+};
+// 패널 밖(테이블 등)을 클릭하면 닫기
+document.getElementById('tableWrap').addEventListener('click', ()=> setRef(false));
+
+/* ================= 시작 ================= */
+hideControls();
+shuffleSeats('게임 시작 — 자리 랜덤 배치');
+startHand();
+</script>
+</body>
+</html>

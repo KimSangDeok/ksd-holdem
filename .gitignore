@@ -1,0 +1,5 @@
+# 전부 무시하고, 공개해도 되는 것만 명시적으로 허용 (유출 원천 차단 방식)
+*
+!.gitignore
+!holdem.html
+!CLAUDE.md
