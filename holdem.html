@@ -526,7 +526,33 @@
     .seat .betchip{display:none}
     .seat .contribLine .nowBet{display:inline}
     .slotLabel{display:none}
-    #controls{padding:7px 8px}
+    #controls{gap:4px;padding:5px 8px}   /* 폰: 줄 간격·여백을 조금 줄여 세로 공간 확보 */
+    /* ── 베팅 줄(최소·½팟·팟·올인·−100·금액·+100·레이즈)을 두 줄로 ──
+       실측(390px 폰): 한 줄로 두면 562px가 필요한데 자리는 374px뿐. 가운데 정렬이라 양쪽이 잘리고
+       왼쪽으로 밀린 최소·½팟은 스크롤로도 닿지 않는다. 글자를 줄여도 190px은 못 줄이므로 줄을 나눈다.
+       위 줄: 프리셋 4개가 각 25% / 아래 줄: −100·금액·+100은 제 크기, 레이즈가 남은 폭을 전부 채움 */
+    #raiseBox{flex-wrap:wrap;overflow:visible;padding:4px 6px;gap:4px}
+    #raiseBox .preset{flex:1 1 calc(25% - 4px);min-width:0;padding:6px 4px;font-size:12px}
+    #raiseBox .nudge{flex:0 0 auto;padding:7px 6px;font-size:12px}
+    #raiseBox #raiseAmt{flex:0 0 64px;width:64px;padding:6px;font-size:16px;-moz-appearance:textfield} /* 폰 입력칸 16px 규칙 (iOS 확대 방지) */
+    #raiseAmt::-webkit-inner-spin-button,#raiseAmt::-webkit-outer-spin-button{-webkit-appearance:none;margin:0} /* 좁은 창의 PC 브라우저에서 스피너가 숫자를 가리는 것 방지 (−100/+100 버튼이 있음) */
+    #raiseBox #btnRaise{flex:1 1 0;min-width:0;padding:7px 8px;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    /* 핸드 종료 줄(다음 핸드·리뷰·속마음·기록)도 4개가 한 줄엔 안 들어가므로 2×2 */
+    .ctlEnd{flex-wrap:wrap;overflow:visible}
+    .ctlEnd > button{flex:1 1 calc(50% - 5px);min-width:0;white-space:nowrap}
+    /* 폰에서는 "👉 내 차례" 글자를 숨긴다 — 테이블 위 초록 배너(👉 당신 차례입니다)와 중복이고,
+       이 56px 때문에 옆 승률 안내가 3~4줄로 늘어나 컨트롤 높이를 잡아먹는다 */
+    #turnHint{display:none}
+    #btnFold,#btnCall{padding:9px 18px}
+    /* 컨트롤 높이: 줄이 하나 늘어난 만큼 키운다. 헤드리스 크롬 실측(내 차례/확정/종료 상태 중 최대):
+       375×553 → 177px, 390×664 → 177px, 360×740 → 199px, 390×844 → 207px → 27.5vh에 3~6px 여유.
+       min-height가 모든 상태보다 크므로 평소엔 고정 높이처럼 동작해 테이블이 안 흔들리고,
+       글꼴 차이로 몇 px 넘치는 경우에만 버튼을 잘라내는 대신 살짝 늘어난다 */
+    #controls{height:auto;min-height:clamp(180px,27.5vh,210px)}
+    /* 테이블: 컨트롤이 커진 만큼 카드·간격을 줄여 보드(공개 카드+팟)가 위·아래 카드와 겹치지 않게 */
+    #table{gap:6px 2px;padding:5px 8px}
+    .card{width:clamp(32px,6.2vh,46px);height:clamp(44px,8.6vh,64px)}
+    #potLine{margin-top:4px;padding:3px 10px;font-size:13px}
   }
 
 </style>
