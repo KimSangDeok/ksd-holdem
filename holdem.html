@@ -8,27 +8,41 @@
 <style>
 
   /* =====================================================================
-     홀덤 연습장 — 화면 스타일 (v3 · 포커 앱 룩)
-       · 배치는 그리드 → 자리·보드가 절대 겹치지 않는다
-       · 그 위에 만듦새(아바타 포드·칩 그래픽·조명·입체 버튼)를 얹는다
-       · 크기는 clamp()로 연속 변화 (브레이크포인트 중복 없음)
+     홀덤 연습장 — 화면 스타일 (v4 · 학습 도구 톤)
+       · 펠트 타원 테이블/아바타 원을 걷어내고 평면 카드형 패널로
+       · 승률 게이지와 코치 한마디를 화면 위쪽 1급 자리로
+       · 상대 3명은 가로 정보칩, 내 패에는 상태 꼬리표
+       · 세로 전용(가로모드 없음) · 모든 탭 요소 44px 이상
      ===================================================================== */
 
-  *, *::before, *::after{margin:0;padding:0;box-sizing:border-box}
+  *, *::before, *::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 
   :root{
-    --line:#232c36; --line2:#2c3743;
+    --line:#232c36; --line2:#2c3743; --line3:#354354;
     --panel:#141a22; --panel2:#1b2430; --sunken:#0c1116;
-    --ink:#eef3f8; --ink2:#a4b1bf; --ink3:#7b8794;
-    --gold:#ffd270; --gold2:#e0a534;
-    --green:#3fc27c; --green2:#1f8a53;
-    --red:#ff8a7a;
+    --surf:#19212b; --surf2:#1e2733;
+    --ink:#e9eff6; --ink2:#9aa9ba; --ink3:#6c7d90;
+    --gold:#f5c463; --gold2:#e0a534;
+    --green:#3fd18a; --green2:#1f8a53; --greenBg:rgba(63,209,138,.12);
+    --red:#ef6a72;
+    --coach:#7fb4ff;
     --pad:clamp(6px,1.1vh,12px);
+    --r:12px;
+
+    /* 카드 크기 — 한 곳에서 모든 화면 크기를 조절한다.
+       --fit 은 무대(테이블 칸)에 실제로 들어가는지 재서 JS가 넣는 배율이다.
+       주소창이 떴다 사라지는 폰처럼 세로가 들쭉날쭉한 화면에서도 카드가 잘리지 않게 한다. */
+    --fit:1;
+    --bcardH:calc(clamp(34px,6.4vh,60px) * var(--fit));  /* 보드 카드 */
+    --mcardH:calc(clamp(42px,7.8vh,74px) * var(--fit));  /* 내 카드 (화면에서 가장 큼) */
+    --scardH:calc(clamp(23px,4vh,40px) * var(--fit));    /* 상대 카드 */
   }
 
   body{
-    font-family:'Segoe UI','Malgun Gothic',sans-serif;
-    background:radial-gradient(1300px 760px at 50% -6%, #1c2531 0%, #0d1219 56%, #06090d 100%);
+    font-family:'Segoe UI','Malgun Gothic','Apple SD Gothic Neo',sans-serif;
+    background:
+      radial-gradient(120% 60% at 50% -8%, #17212c 0%, rgba(23,33,44,0) 60%),
+      linear-gradient(180deg,#0e1319 0%, #0c1116 100%);
     color:var(--ink); height:100vh; height:100dvh; display:flex; overflow:hidden;
     -webkit-font-smoothing:antialiased;
   }
@@ -69,11 +83,9 @@
   @media (max-width:780px){ #ref{flex-direction:column;gap:0} }
 
   /* ───────── 게임 영역 ───────── */
-  #main{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden}
+  #main{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden;
+        padding-bottom:0}
 
-  /* 고정 높이 + 줄바꿈 조합이라 내용이 넘치면 둘째 줄이 통째로 잘렸다.
-     실제로 [📚 가이드] 버튼이 잘린 줄로 밀려 아래 메시지 영역을 덮고 있었다.
-     높이를 내용에 맡기고, 폰에서는 아예 한 줄에 들어가게 내용을 줄인다. */
   #topbar{
     flex:none;min-height:clamp(44px,6.4vh,54px);display:flex;align-items:center;
     gap:clamp(8px,1vw,14px);padding:0 clamp(10px,1.4vw,20px);
@@ -87,169 +99,233 @@
   #sndGroup{display:flex;gap:13px;align-items:center}
   #sndVol{accent-color:var(--gold2)}
 
-  /* 안내 배너 */
+  /* ───────── 차례 안내 배너 ───────── */
   #msgRow{flex:none;display:flex;align-items:center;justify-content:center;
-          min-height:clamp(34px,5.6vh,52px);padding:2px 10px}
+          min-height:clamp(26px,3.6vh,34px);padding:1px clamp(10px,1.4vw,20px)}
   #msg{
-    font-size:clamp(13px,2vh,17px);font-weight:800;color:#e8eef5;
-    background:rgba(0,0,0,.45);border:1px solid var(--line2);
-    padding:clamp(4px,.8vh,8px) clamp(14px,2vw,26px);border-radius:999px;text-align:center;max-width:100%;
+    width:100%;min-height:24px;
+    display:flex;align-items:center;justify-content:center;gap:7px;
+    font-size:clamp(11.5px,1.6vh,13px);font-weight:800;color:#cdd9e5;
+    background:rgba(255,255,255,.035);border:1px solid var(--line);
+    padding:3px 12px;border-radius:9px;text-align:center;
   }
   #msg:empty{display:none}
   #msg.myturn{
-    color:#04220f;border:none;
-    background:linear-gradient(180deg,#54d98d,#2a9c60);
-    box-shadow:0 6px 24px rgba(63,194,124,.4), inset 0 1px 0 rgba(255,255,255,.4);
-    animation:myturnPulse 1.5s ease-in-out infinite;
+    color:#062a17;border:none;
+    background:linear-gradient(90deg,rgba(63,209,138,.75),#3fd18a 45%,rgba(63,209,138,.75));
+    box-shadow:0 4px 16px rgba(63,209,138,.3), inset 0 1px 0 rgba(255,255,255,.4);
+    animation:myturnPulse 1.9s ease-in-out infinite;
   }
   @keyframes myturnPulse{
-    0%,100%{box-shadow:0 6px 20px rgba(63,194,124,.32), inset 0 1px 0 rgba(255,255,255,.4)}
-    50%    {box-shadow:0 6px 34px rgba(63,194,124,.62), inset 0 1px 0 rgba(255,255,255,.4)}
+    0%,100%{box-shadow:0 3px 12px rgba(63,209,138,.26), inset 0 1px 0 rgba(255,255,255,.4)}
+    50%    {box-shadow:0 3px 22px rgba(63,209,138,.55), inset 0 1px 0 rgba(255,255,255,.4)}
   }
 
-  #tableWrap{flex:1;min-height:220px;position:relative;display:flex;
-             align-items:center;justify-content:center;padding:0 clamp(6px,1.4vw,22px)}
+  /* ═════════ 학습 헤드업 (승률 게이지 + 코치 한마디) ═════════
+     이 두 블록이 화면 위쪽의 주인공이다. 예전에는 승률이 화면 맨 아래
+     컨트롤 칸 안에 끼어 있어서, 정작 판단할 때 눈이 가지 않았다. */
+  #hud{
+    flex:none;display:flex;flex-direction:column;gap:clamp(3px,.5vh,5px);
+    padding:clamp(3px,.5vh,5px) clamp(10px,1.4vw,20px) 0;
+  }
 
-  /* ───────── 테이블 (그리드 = 겹침 불가) ───────── */
+  /* ── 승률 = 20판 중 몇 판 (자연빈도 배열) ── */
+  .gauge{
+    background:linear-gradient(180deg,#1b2530,#161e27);
+    border:1px solid var(--line3);
+    border-radius:var(--r);
+    padding:clamp(4px,.7vh,8px) clamp(8px,1.2vw,12px);
+    box-shadow:0 6px 16px rgba(0,0,0,.34), inset 0 1px 0 rgba(255,255,255,.05);
+    display:flex;flex-direction:column;gap:clamp(2px,.4vh,4px);
+  }
+  .ghead{display:flex;align-items:baseline;gap:5px;min-width:0}
+  .ghead .gl{font-size:clamp(9.5px,1.35vh,11px);color:var(--ink3);font-weight:700;flex:none}
+  .ghead .gv{
+    font-size:clamp(16px,2.3vh,21px);font-weight:800;color:var(--green);
+    letter-spacing:-.6px;line-height:1;text-shadow:0 0 14px rgba(63,209,138,.3);flex:none;
+    font-variant-numeric:tabular-nums;
+  }
+  .ghead .gu{font-size:clamp(10px,1.45vh,12px);font-weight:800;color:var(--ink2);flex:none}
+  .gbadge{
+    margin-left:auto;align-self:center;flex:none;white-space:nowrap;
+    height:20px;padding:0 8px;border-radius:99px;
+    display:flex;align-items:center;
+    background:rgba(255,255,255,.05);border:1px solid var(--line2);
+    font-size:clamp(9.5px,1.35vh,11px);font-weight:800;color:var(--ink2);
+  }
+  .gbadge.good{background:var(--greenBg);border-color:rgba(63,209,138,.4);color:var(--green)}
+  .gbadge.bad{background:rgba(239,106,114,.12);border-color:rgba(239,106,114,.4);color:var(--red)}
+  .gauge.warn .ghead .gv{color:var(--red);text-shadow:0 0 14px rgba(239,106,114,.28)}
+
+  /* #oddsHint = 게임이 채우는 승률 블록 (fbar + ftext + fsub) */
+  #oddsHint{
+    min-width:0;display:flex;flex-direction:column;gap:clamp(2px,.4vh,4px);
+    font-variant-numeric:tabular-nums;
+    /* 문구가 길어져도 게이지가 무대(카드) 자리를 먹지 않게 상한을 둔다 */
+    max-height:clamp(46px,9vh,76px);overflow:hidden;
+  }
+  #oddsHint:empty{display:none}
+  /* 20칸 배열: 한 칸 = 20판 중 1판 = 5% */
+  .fbar{position:relative;display:flex;gap:clamp(2px,.4vw,3px);flex:none;
+        height:clamp(10px,1.5vh,15px)}
+  .fcell{flex:1;min-width:0;border-radius:4px;background:#1a222c;border:1px solid #2b3744;
+         box-shadow:inset 0 1px 2px rgba(0,0,0,.4)}
+  /* 본전 구간(짙은 초록) */
+  .fcell.even{background:linear-gradient(90deg,#2c6a4d var(--f,100%),#1a222c 0);
+              border-color:#38805e;box-shadow:none}
+  /* 여기서부터가 버는 판(밝은 초록) */
+  .fcell.gain{background:linear-gradient(90deg,#4ae095 var(--f,100%),#1a222c 0);
+              border-color:#57e9a0;box-shadow:0 0 8px rgba(63,209,138,.25)}
+  /* 본전선 — 이 선보다 오른쪽까지 차야 이득 */
+  .fneed{position:absolute;top:-3px;bottom:-3px;width:2px;margin-left:-1px;
+         background:#e9eff6;border-radius:2px;box-shadow:0 0 0 2px rgba(17,24,32,.9);z-index:2}
+  .ftext{font-size:clamp(11px,1.6vh,12.5px);color:var(--ink);line-height:1.28;
+         letter-spacing:-.3px;word-break:keep-all;overflow-wrap:break-word;
+         display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+  .ftext .good,.ftext .bad{white-space:nowrap}
+  .ftext b{color:var(--green);font-weight:800}
+  .fsub{font-size:clamp(9.5px,1.3vh,10.5px);color:var(--ink2);line-height:1.22;
+        letter-spacing:-.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #oddsHint .good{color:var(--green);font-weight:800}
+  #oddsHint .bad{color:var(--red);font-weight:800}
+
+  /* ── 코치 한마디 (상시 노출) ── */
+  .coach{display:flex;align-items:flex-start;gap:7px;min-width:0}
+  .cav{
+    flex:none;width:clamp(26px,3.6vh,31px);height:clamp(26px,3.6vh,31px);border-radius:9px;
+    background:linear-gradient(180deg,#2b3a4e,#1f2b3a);border:1px solid #3b4d63;
+    display:flex;align-items:center;justify-content:center;
+    font-size:clamp(13px,1.9vh,16px);color:var(--coach);
+    box-shadow:0 2px 6px rgba(0,0,0,.3);
+  }
+  .bubble{
+    position:relative;flex:1 1 auto;min-width:0;
+    background:linear-gradient(180deg,#1d2835,#18212c);
+    border:1px solid #31445a;border-radius:11px;
+    padding:3px 9px 4px 10px;
+  }
+  .bubble::before{
+    content:"";position:absolute;left:-5px;top:11px;width:9px;height:9px;
+    background:#1d2835;border-left:1px solid #31445a;border-bottom:1px solid #31445a;
+    transform:rotate(45deg);border-radius:0 0 0 3px;
+  }
+  .chead{display:flex;align-items:center;gap:6px;min-width:0}
+  .cname{font-size:clamp(9px,1.3vh,10.5px);font-weight:800;color:var(--coach);flex:none}
+  .cstat{
+    margin-left:auto;flex:none;display:flex;align-items:center;gap:4px;white-space:nowrap;
+    font-size:clamp(9px,1.3vh,10.5px);font-weight:700;
+    padding:1px 7px;border-radius:99px;
+    background:rgba(255,255,255,.05);border:1px solid var(--line2);color:var(--ink3);
+  }
+  .cstat i{width:5px;height:5px;border-radius:50%;background:currentColor;display:block;flex:none}
+  .cstat.on{background:var(--greenBg);border-color:rgba(63,209,138,.3);color:var(--green)}
+  .ctx{
+    font-size:clamp(10.5px,1.55vh,12px);line-height:1.3;color:var(--ink);letter-spacing:-.3px;
+    display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;
+    word-break:keep-all;overflow-wrap:break-word;
+  }
+  .ctx b{color:var(--green);font-weight:800}
+  /* 선행 분석 진행 알약 — 말풍선 머리에 붙는다 */
+  #preState{font-size:clamp(9px,1.3vh,10.5px);font-weight:800;border-radius:99px;
+            padding:1px 7px;border:1px solid var(--line2);white-space:nowrap;flex:none;
+            margin-left:auto;color:var(--ink3)}
+  #preState:empty{display:none}
+  #preState.work{color:var(--gold);border-color:rgba(245,196,99,.4);background:rgba(245,196,99,.1)}
+  #preState.ready{color:var(--green);border-color:rgba(63,209,138,.45);background:var(--greenBg)}
+  #preState.fail{color:var(--red);border-color:rgba(239,106,114,.4);background:rgba(239,106,114,.1)}
+  /* 선행 분석 알약이 떠 있으면 연결 상태 칩은 자리를 비켜준다 */
+  #preState:not(:empty) + #hudState{display:none}
+
+  /* ── 선택지 미리보기 줄 (내 차례 전) ── */
+  #actPreview{
+    display:flex;align-items:stretch;gap:clamp(4px,.8vw,7px);min-width:0;
+    height:clamp(23px,3.2vh,29px);
+  }
+  #actPreview.off{visibility:hidden}     /* 자리는 남기고 감춘다 → 화면이 튀지 않는다 */
+  #actPreview .apl{
+    flex:none;align-self:center;white-space:nowrap;
+    font-size:clamp(9px,1.3vh,10.5px);font-weight:700;color:var(--ink3);letter-spacing:-.2px;
+  }
+  #actPreview .act{
+    flex:1 1 0;min-width:0;
+    display:flex;align-items:center;justify-content:center;gap:4px;
+    border-radius:8px;border:1px solid var(--line2);
+    background:rgba(255,255,255,.03);padding:0 5px;overflow:hidden;
+  }
+  #actPreview .act .t{font-size:clamp(9.5px,1.35vh,11px);font-weight:800;color:var(--ink2);white-space:nowrap}
+  #actPreview .act .s2{font-size:clamp(9px,1.3vh,10.5px);font-weight:700;color:var(--ink3);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #actPreview .a-call{border-color:rgba(63,209,138,.28);background:var(--greenBg)}
+  #actPreview .a-call .t{color:var(--green)}
+  #actPreview .a-raise{border-color:rgba(245,196,99,.28);background:rgba(245,196,99,.07)}
+  #actPreview .a-raise .t{color:var(--gold)}
+  #actPreview .rec-pin{position:static;transform:none;flex:none;font-size:8.5px;
+    padding:0 5px;box-shadow:none;line-height:1.5}
+  #actPreview .tip{
+    flex:1 1 auto;min-width:0;align-self:center;text-align:center;
+    font-size:clamp(9px,1.3vh,10.5px);color:var(--ink3);letter-spacing:-.2px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  #actPreview .tip b{color:var(--ink2);font-weight:800}
+
+  /* ═════════ 무대 (상대 / 보드 / 내 패) ═════════ */
+  #tableWrap{flex:1;min-height:0;position:relative;display:flex;
+             align-items:stretch;justify-content:center;
+             padding:clamp(4px,.8vh,8px) clamp(10px,1.4vw,20px) 0}
+
+  /* 펠트 타원·나무 테두리·조명 없음. 평면 학습 화면. */
   #table{
     position:relative;
-    width:min(100%,1120px,calc((100vh - 250px) * 1.75));
-    height:min(100%,600px);
-    border-radius:clamp(90px,26vh,240px)/clamp(60px,17vh,160px);
-    background:radial-gradient(120% 96% at 50% 24%,
-      #21855a 0%, #156a45 32%, #0e4e32 60%, #0a3a26 82%, #07291c 100%);
-    border:clamp(8px,1.6vh,14px) solid #171c22;
-    outline:1px solid #333d49;
-    box-shadow:inset 0 0 100px rgba(0,0,0,.55),
-               inset 0 8px 30px rgba(255,255,255,.08),
-               0 26px 70px rgba(0,0,0,.72);
-    display:grid;
-    grid-template-columns:minmax(0,1fr) minmax(0,1.5fr) minmax(0,1fr);
-    /* 위/아래 줄 높이를 미리 잡아둔다 — 액션 알약·배지가 생겼다 사라질 때 보드가 흔들리지 않게 */
-    grid-template-rows:minmax(clamp(64px,12vh,104px),auto) minmax(0,1fr) minmax(clamp(88px,16.5vh,146px),auto);
-    grid-template-areas:". top ." "left board right" ". me .";
-    align-items:center; justify-items:center;
-    padding:clamp(5px,1.1vh,12px) clamp(8px,2.4vw,34px);
-    gap:clamp(6px,1.6vh,18px) clamp(2px,.5vw,8px);   /* 행 간격을 넉넉히 → 보드와 자리가 붙지 않음 */
+    width:min(100%,1120px);flex:1 1 auto;min-height:0;
+    border-radius:var(--r);
+    background:none;border:0;outline:none;box-shadow:none;
+    display:flex;flex-direction:column;justify-content:space-evenly;
+    gap:clamp(3px,.7vh,10px);
     overflow:hidden;
   }
-  /* 펠트 직조 질감 */
-  #table::after{
-    content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
-    background-image:
-      repeating-linear-gradient(45deg, rgba(255,255,255,.014) 0 2px, transparent 2px 4px),
-      repeating-linear-gradient(-45deg, rgba(0,0,0,.02) 0 2px, transparent 2px 4px);
-  }
 
-  /* ───────── 보드 ───────── */
-  #boardArea{grid-area:board;display:flex;flex-direction:column;align-items:center;min-width:0;z-index:2}
-  #board{display:flex;gap:clamp(3px,.6vw,8px);justify-content:center}
-  .slotWrap{display:flex;flex-direction:column;align-items:center}
-  .slotLabel{font-size:clamp(8.5px,1.3vh,11px);color:rgba(210,235,215,.5);margin-top:3px}
-  #potLine{
-    margin-top:clamp(5px,1.1vh,11px);
-    font-size:clamp(13px,2.1vh,17px);font-weight:800;color:#fff;
-    font-variant-numeric:tabular-nums;white-space:nowrap;
-    background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.17);
-    border-radius:999px;padding:clamp(4px,.8vh,7px) clamp(11px,1.5vw,19px);
-    box-shadow:0 6px 18px rgba(0,0,0,.5);
+  /* ── 상대 3명: 가로 정보칩 ── */
+  .opps{display:flex;gap:clamp(4px,.8vw,8px);flex:none;align-items:stretch}
+  .opp{
+    flex:1 1 0;min-width:0;
+    background:linear-gradient(180deg,var(--surf2),#171e27);
+    border:1px solid var(--line2);border-radius:10px;
+    padding:clamp(4px,.7vh,7px) clamp(5px,.7vw,8px);
+    display:flex;
   }
+  .opp:has(.seat.acting){
+    border-color:rgba(245,196,99,.5);
+    box-shadow:0 0 0 1px rgba(245,196,99,.14), 0 4px 12px rgba(0,0,0,.35);
+    background:linear-gradient(180deg,#26303c,#1a222c);
+  }
+  .opp:has(.seat.winner){
+    border-color:rgba(63,209,138,.55);
+    box-shadow:0 0 0 1px rgba(63,209,138,.18), 0 4px 14px rgba(63,209,138,.2);
+  }
+  .opp:has(.seat.folded){border-color:rgba(239,106,114,.22)}
 
-  /* ───────── 카드 ───────── */
-  .card{
-    position:relative;flex:none;
-    width:clamp(34px,7vh,64px);height:clamp(48px,9.9vh,90px);
-    border-radius:7px;background:linear-gradient(170deg,#ffffff,#eff2f6);color:#15181d;
-    display:grid;place-items:center;font-weight:800;
-    box-shadow:0 6px 16px rgba(0,0,0,.55), inset 0 0 0 1px rgba(0,0,0,.1);
-  }
-  .card .cidx{
-    position:absolute;top:4px;left:5px;line-height:1;text-align:center;font-weight:900;
-    font-size:clamp(9px,1.6vh,14px);
-  }
-  .card .cidx small{display:block;font-size:.8em;margin-top:1px}
-  .card .suit{font-size:clamp(17px,3.6vh,33px);opacity:.9;line-height:1}
-  .card.red{color:#d02a2a}
-  .card.back{
-    background:repeating-linear-gradient(45deg,#31518f,#31518f 4px,#274276 4px,#274276 8px);
-    border:1.5px solid #dfe6ef;color:transparent;
-  }
-  .card.hl{box-shadow:0 0 0 3px var(--gold), 0 0 20px rgba(255,210,112,.85);transform:translateY(-4px);z-index:4}
-  .card.slot{background:rgba(255,255,255,.045);border:1.5px dashed rgba(255,255,255,.2);
-             box-shadow:none;color:transparent}
-  .cardSm{width:clamp(26px,5.4vh,48px);height:clamp(37px,7.6vh,68px)}
-  .cardSm .cidx{font-size:clamp(8px,1.3vh,11px);top:3px;left:4px}
-  .cardSm .suit{font-size:clamp(13px,2.7vh,25px)}
-
-  /* ───────── 자리 ───────── */
-  .seat{
-    position:relative;min-width:0;max-width:100%;z-index:3;
-    display:flex;flex-direction:column;align-items:center;gap:clamp(1px,.35vh,4px);
-    transition:opacity .25s;
-  }
-  #seat2{grid-area:top}
-  #seat1{grid-area:left}
-  #seat3{grid-area:right}
-  #seat0{grid-area:me}
-  #seat0 .cards{order:-1}          /* 내 카드는 중앙 쪽(위)으로 */
-  #seat0.winner .rebuyInfo{display:none}
-  .seat.folded{opacity:.42}
-  .seat.folded .pod{filter:grayscale(1)}
-
-  /* 아바타 포드 */
-  .pod{
-    position:relative;flex:none;
-    width:clamp(26px,4.6vh,40px);height:clamp(26px,4.6vh,40px);border-radius:50%;
-    background:linear-gradient(160deg,#3c4a5b,#232c37);
-    display:grid;place-items:center;font-weight:800;color:#e9eff6;
-    font-size:clamp(13px,2.2vh,19px);
-    border:2px solid #4d5b6d;
-    box-shadow:0 6px 16px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.16);
-  }
-  #seat0 .pod{background:linear-gradient(160deg,#5f7189,#333f4f);border-color:#8fa2b8}
-  .seat.acting .pod{border-color:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.2),0 6px 18px rgba(0,0,0,.65)}
-  .seat.acting .pod::after{
-    content:'';position:absolute;inset:-7px;border-radius:50%;
-    background:conic-gradient(var(--green) 0 70%, rgba(255,255,255,.10) 70% 100%);
-    -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 3px),#000 0);
-            mask:radial-gradient(farthest-side,transparent calc(100% - 3px),#000 0);
-    animation:spin 9s linear infinite;
-  }
-  @keyframes spin{to{transform:rotate(360deg)}}
-
-  /* 딜러 버튼 */
-  .dbtn{
-    /* 아바타 밖으로 9px 나와서 옆 스택 숫자를 2px 덮고 있었다(실측). 사이 여백 안으로 들인다 */
-    position:absolute;right:-5px;bottom:-4px;
-    width:clamp(15px,2.6vh,22px);height:clamp(15px,2.6vh,22px);border-radius:50%;
-    background:radial-gradient(circle at 34% 30%,#fff,#d5d5d5);color:#1b1b1b;
-    font-size:clamp(9px,1.5vh,12px);font-weight:900;display:grid;place-items:center;
-    box-shadow:0 3px 8px rgba(0,0,0,.6);
-  }
-
-  /* 명찰 — 아바타를 안에 품은 가로형 (세로 높이 절약) */
-  .seat .box{
-    position:relative;max-width:100%;
-    display:flex;align-items:center;gap:clamp(5px,.7vw,9px);
-    background:rgba(3,9,7,.8);border:1px solid rgba(255,255,255,.15);
-    border-radius:12px;padding:clamp(3px,.55vh,6px) clamp(8px,1vw,12px);
-    box-shadow:0 5px 14px rgba(0,0,0,.5);
-  }
-  .binfo{min-width:0;text-align:left;line-height:1.25}
-  .seat .pstack em{font-style:normal;font-size:.72em;color:var(--red);margin-left:3px}
-  .seat.acting .box{border-color:rgba(255,255,255,.5)}
-  .seat.winner .box{border-color:var(--green);box-shadow:0 0 18px rgba(63,194,124,.5)}
-  .seat.folded .box{border-color:rgba(255,120,110,.3)}
+  /* ── 자리 공통 ── */
+  .seat{position:relative;min-width:0;max-width:100%;flex:1 1 auto;
+        display:flex;flex-direction:column;align-items:stretch;
+        gap:clamp(1px,.35vh,4px);transition:opacity .2s}
+  .seat.folded{opacity:.45}
+  .seat .box{position:static;display:flex;align-items:center;gap:6px;min-width:0;
+             background:none;border:0;padding:0;box-shadow:none;border-radius:0}
+  /* 딜러 버튼이 있는 자리만 오른쪽 위를 비워 둔다 (paintHud 가 hasD 를 붙인다) */
+  .seat.hasD .binfo{padding-right:19px}
+  .binfo{min-width:0;flex:1 1 auto;text-align:left;line-height:1.24}
   .seat .pname,.seat .ptype,.seat .pstack,.seat .lastAct,
   .seat .contribLine,.rebuyInfo{overflow:hidden;text-overflow:ellipsis;max-width:100%;white-space:nowrap}
-  .seat .pname{font-weight:800;font-size:clamp(11px,1.8vh,14px);line-height:1.3}
-  .seat .ptype{font-size:clamp(9px,1.4vh,11.5px);color:#8fa89a;line-height:1.3}
-  .seat .pstack{font-size:clamp(13px,2.2vh,17px);font-weight:800;color:var(--gold);
-                font-variant-numeric:tabular-nums;line-height:1.35}
-  .seat .contribLine{font-size:clamp(9px,1.4vh,11px);color:#93a89b;font-weight:700}
+  .seat .pname{font-weight:800;font-size:clamp(11px,1.75vh,14px);line-height:1.25;color:var(--ink)}
+  .seat .ptype{font-size:clamp(8.5px,1.25vh,11px);line-height:1.3;color:var(--ink2);
+               font-weight:700;letter-spacing:-.2px}
+  .seat .pstack{font-size:clamp(11px,1.7vh,15px);font-weight:800;color:var(--gold);
+                font-variant-numeric:tabular-nums;line-height:1.3}
+  .seat .pstack em{font-style:normal;font-size:.72em;color:var(--red);margin-left:3px}
+  .seat .contribLine{font-size:clamp(8.5px,1.25vh,11px);color:var(--ink2);font-weight:700}
   .seat .contribLine b{color:#cfe0d4;font-weight:800}
-  .seat .contribLine .nowBet{display:none;color:var(--green)}
-  .rebuyInfo{font-size:clamp(8.5px,1.3vh,11px);color:#8496a4;font-weight:700;
+  .seat .contribLine .nowBet{display:inline;color:var(--green);font-weight:800}
+  .rebuyInfo{font-size:clamp(8px,1.2vh,10.5px);color:var(--ink3);font-weight:700;
              font-variant-numeric:tabular-nums}
   .rebuyInfo .pl-p{color:var(--green);font-weight:800}
   .rebuyInfo .pl-m{color:var(--red);font-weight:800}
@@ -257,42 +333,182 @@
   .seat:not(#seat0) .rbFull{display:none}
   .seat:not(#seat0) .rbShort{display:inline}
 
-  /* 마지막 액션 */
-  .seat .lastAct{
-    font-size:clamp(9.5px,1.5vh,12px);font-weight:800;color:#cfe0d4;
-    background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.13);
-    border-radius:999px;padding:1px 9px;
+  /* 상대 칩 안쪽 배치: 이름(+D) / 성향 태그 / 스택 · 이번 베팅 / 카드 · 마지막 액션 */
+  .opp .seat{flex-direction:row;flex-wrap:wrap;align-items:center;
+             gap:1px clamp(3px,.6vw,6px)}
+  .opp .box{flex:1 1 100%}
+  .opp .cards{flex:0 0 auto}
+  .opp .seatFoot{flex:1 1 auto;justify-content:flex-end;min-width:0}
+  .opp .rebuyInfo{flex:1 1 100%;text-align:right}
+  .opp .winBadge{flex:1 1 100%;order:-1}
+  .opp .binfo{display:grid;grid-template-columns:auto minmax(0,1fr);
+              grid-template-areas:"nm nm" "tp tp" "stk bet";align-items:baseline;gap:0 5px}
+  .opp .pname{grid-area:nm}
+  .opp .ptype{
+    grid-area:tp;justify-self:start;margin:1px 0;
+    padding:1px 5px;border-radius:5px;
+    background:rgba(154,169,186,.12);border:1px solid rgba(154,169,186,.25);color:#a9b7c6;
   }
-  .seat.winner .lastAct{color:var(--gold);border-color:rgba(255,210,112,.4)}
+  .opp .ptype.t-pro{background:rgba(127,180,255,.14);border-color:rgba(127,180,255,.28);color:#9cc6ff}
+  .opp .ptype.t-tight{background:rgba(154,169,186,.12);border-color:rgba(154,169,186,.25);color:#a9b7c6}
+  .opp .ptype.t-loose{background:rgba(245,196,99,.13);border-color:rgba(245,196,99,.3);color:var(--gold)}
+  .opp .pstack{grid-area:stk}
+  .opp .contribLine{grid-area:bet;justify-self:end;min-width:0;
+    padding:1px 5px;border-radius:6px;
+    background:rgba(154,169,186,.1);border:1px solid rgba(154,169,186,.2)}
+  /* 좁은 칩에 두 숫자를 다 넣으면 잘린다 — 이번 베팅은 아래 알약(콜 200 / 벳 400)이 보여준다 */
+  .opp .contribLine .nowBet{display:none}
+  .seat.acting .pname{color:var(--gold)}
+  .mine:has(.seat.acting){border-color:rgba(63,209,138,.55);
+    box-shadow:0 0 0 1px rgba(63,209,138,.14), 0 4px 14px rgba(0,0,0,.35)}
+
+  /* 아바타 원(.pod)은 쓰지 않는다 — 딜러 버튼만 명찰 모서리에 남긴다 */
+  .pod{
+    position:static;display:block;visibility:hidden;overflow:visible;
+    width:0;height:0;min-width:0;min-height:0;flex:0 0 0;
+    margin:0;padding:0;border:0;background:none;box-shadow:none;
+    font-size:0;line-height:0;color:transparent;
+  }
+  .pod::after,.pod::before{content:none;display:none}
+  .dbtn{
+    visibility:visible;position:absolute;right:0;top:0;left:auto;bottom:auto;
+    width:17px;height:17px;border-radius:50%;
+    background:linear-gradient(180deg,#f4f7fa,#c9d4e0);color:#141a21;
+    font-size:9.5px;font-weight:900;line-height:17px;text-align:center;
+    display:block;z-index:4;box-shadow:0 1px 3px rgba(0,0,0,.5);
+  }
+
+  /* 마지막 액션 + 깔린 칩 */
+  .seatFoot{display:flex;align-items:center;justify-content:center;
+            gap:clamp(3px,.5vw,7px);flex-wrap:nowrap;max-width:100%;min-width:0}
+  .seat .lastAct{
+    font-size:clamp(9px,1.35vh,11.5px);font-weight:800;color:#cfe0d4;
+    background:rgba(255,255,255,.06);border:1px solid var(--line2);
+    border-radius:99px;padding:1px 8px;
+  }
+  .seat .lastAct.b-bet{background:rgba(245,196,99,.15);border-color:rgba(245,196,99,.32);color:var(--gold)}
+  .seat .lastAct.b-call{background:rgba(154,169,186,.12);border-color:rgba(154,169,186,.24);color:#b7c4d2}
+  .seat .lastAct.b-fold{background:rgba(239,106,114,.1);border-color:rgba(239,106,114,.26);color:#ef8f95}
+  .seat.winner .lastAct{color:var(--gold);border-color:rgba(245,196,99,.4)}
   .seat .cards{display:flex;gap:clamp(2px,.4vw,5px);justify-content:center}
+  .seat .betchip{display:flex;align-items:center;justify-content:center;flex:none}
+  .seat .betchip:empty{display:none}
 
   /* 배지 */
   .seat .winBadge{
     display:block;background:linear-gradient(180deg,#ffd76a,#e8a72e);color:#241a00;
-    font-weight:900;border-radius:999px;padding:2px 11px;font-size:clamp(10px,1.6vh,13px);
-    white-space:nowrap;box-shadow:0 0 18px rgba(255,213,79,.75);animation:winPop .3s ease-out;
-    margin-bottom:3px;
+    font-weight:900;border-radius:999px;padding:1px 9px;font-size:clamp(9.5px,1.4vh,12px);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    box-shadow:0 0 14px rgba(255,213,79,.6);animation:winPop .3s ease-out;
   }
   .seat .winBadge.returnBadge{background:linear-gradient(180deg,#4a5568,#2d3748);color:#e2e8f0;
                               box-shadow:0 2px 8px rgba(0,0,0,.5)}
   @keyframes winPop{0%{transform:scale(.5);opacity:0}100%{transform:scale(1);opacity:1}}
+  /* 폴드 도장은 명찰 한가운데 — 칩 밖으로 나가면 잘린다 */
+  /* 폴드한 상대는 카드가 그려지지 않는다 → 도장을 칩 아래쪽 빈 곳에 찍어 스택을 가리지 않게 */
   .foldStamp{
-    position:absolute;top:-9px;right:-9px;transform:rotate(12deg);
+    position:absolute;left:50%;bottom:3px;top:auto;transform:translateX(-50%) rotate(-8deg);
     color:#ff7b6e;border:2px solid #ff7b6e;border-radius:6px;padding:0 6px;
-    font-weight:900;font-size:10px;letter-spacing:2px;background:rgba(30,0,0,.85);
-    pointer-events:none;z-index:5;
+    font-weight:900;font-size:10px;letter-spacing:2px;background:rgba(30,0,0,.82);
+    pointer-events:none;z-index:5;white-space:nowrap;
   }
-  .seat .posBadge{display:none}   /* 딜러는 아바타의 D 버튼으로 표시 */
+  /* 내 자리는 접어도 카드를 계속 보여주므로 도장을 오른쪽에 붙인다 */
+  #seat0 .foldStamp{left:auto;right:6px;bottom:auto;top:50%;transform:translateY(-50%) rotate(-8deg)}
+  .seat .posBadge{display:none}   /* 자리 표시는 딜러 버튼 D 하나로 충분 */
+
+  /* ───────── 카드 ───────── */
+  .card{
+    --ch:var(--bcardH);
+    position:relative;flex:none;
+    width:calc(var(--ch) * .71);height:var(--ch);
+    border-radius:6px;background:linear-gradient(170deg,#ffffff,#e6edf4);color:#15181d;
+    display:grid;place-items:center;font-weight:800;
+    box-shadow:0 4px 10px rgba(0,0,0,.5), inset 0 0 0 1px rgba(0,0,0,.09);
+  }
+  .card .cidx{
+    position:absolute;top:3px;left:4px;line-height:1;text-align:center;font-weight:900;
+    font-size:calc(var(--ch) * .23);
+  }
+  .card .cidx small{display:block;font-size:.8em;margin-top:1px}
+  .card .suit{font-size:calc(var(--ch) * .4);opacity:.9;line-height:1}
+  .card.red{color:#c8303f}
+  .card.back{
+    background:repeating-linear-gradient(45deg,#31518f,#31518f 4px,#274276 4px,#274276 8px);
+    border:1.5px solid #dfe6ef;color:transparent;
+  }
+  .card.hl{box-shadow:0 0 0 3px var(--gold), 0 0 18px rgba(245,196,99,.8);transform:translateY(-3px);z-index:4}
+  .card.slot{background:rgba(255,255,255,.02);border:1.5px dashed #38465a;
+             box-shadow:none;color:transparent}
+  .cardSm{--ch:var(--scardH);border-radius:5px}
+  #seat0 .cards .card{--ch:var(--mcardH);border-radius:8px;
+    box-shadow:0 5px 13px rgba(0,0,0,.5), 0 0 0 2px rgba(63,209,138,.34), inset 0 1px 0 rgba(255,255,255,.8)}
+
+  /* ── 보드 + 팟 ── */
+  #boardArea{
+    flex:none;display:flex;align-items:center;justify-content:center;
+    gap:clamp(5px,1vw,10px);flex-wrap:wrap;min-width:0;z-index:2;
+    background:linear-gradient(180deg,rgba(28,38,48,.5),rgba(20,27,35,.5));
+    border:1px solid var(--line);border-radius:var(--r);
+    padding:clamp(5px,.9vh,9px) clamp(7px,1vw,11px);
+  }
+  #board{display:flex;gap:clamp(3px,.6vw,7px);justify-content:center;flex:1 1 auto;min-width:0}
+  .slotWrap{display:flex;flex-direction:column;align-items:center;min-width:0}
+  .slotLabel{font-size:clamp(8px,1.2vh,10px);color:var(--ink3);margin-top:2px;white-space:nowrap}
+  #potLine{
+    order:-1;flex:none;white-space:nowrap;
+    font-size:clamp(11px,1.7vh,14px);font-weight:800;color:var(--gold);
+    font-variant-numeric:tabular-nums;
+    background:rgba(245,196,99,.09);border:1px solid rgba(245,196,99,.28);
+    border-radius:9px;padding:clamp(3px,.6vh,6px) clamp(8px,1.1vw,13px);
+  }
+
+  /* ── 내 패 ── */
+  .mine{
+    flex:none;display:flex;flex-direction:row;align-items:center;flex-wrap:nowrap;
+    gap:clamp(5px,1vw,10px);min-width:0;
+    background:linear-gradient(180deg,rgba(63,209,138,.07),rgba(63,209,138,.02));
+    border:1px solid rgba(63,209,138,.26);border-radius:var(--r);
+    padding:clamp(5px,.9vh,9px) clamp(7px,1vw,11px);
+  }
+  #seat0{flex-direction:row;align-items:center;flex-wrap:wrap;
+         gap:clamp(3px,.6vh,6px) clamp(6px,1.2vw,11px)}
+  #seat0 .cards{order:-1;flex:none}           /* 내 카드는 왼쪽으로 */
+  #seat0 .box{flex:1 1 0;min-width:0}
+  #seat0 .dbtn{display:none}   /* 내 자리 이름(딜러/BB…)은 아래 꼬리표 줄에 글자로 적는다 */
+  #seat0 .binfo{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 7px}
+  #seat0 .pname{flex:none}
+  #seat0 .ptype{flex:none;font-size:clamp(8.5px,1.2vh,10.5px);color:var(--ink3)}
+  #seat0 .pstack{flex:1 1 100%}
+  #seat0 .contribLine{flex:1 1 100%}
+  #seat0 .seatFoot{flex:none;margin-left:auto}
+  #seat0 .rebuyInfo{flex:1 1 100%;margin:0}
+  #seat0 .winBadge{flex:1 1 100%;order:-2}
+  #seat0.winner .rebuyInfo{display:none}
+
+  /* 내 패 상태 꼬리표 — 지금 무슨 패인지 한 줄로 */
+  #seat0{flex:1 1 auto;min-width:0}
+  .mymeta{flex:0 1 auto;min-width:0;max-width:42%;display:flex;flex-direction:column;
+          align-items:flex-start;justify-content:center;gap:1px}
+  .mtag{
+    flex:none;align-self:center;
+    font-size:clamp(11px,1.65vh,13px);font-weight:800;color:#0f1b15;letter-spacing:-.3px;
+    padding:2px 9px;border-radius:7px;
+    background:linear-gradient(180deg,#4ae095,#2fb976);
+    box-shadow:0 2px 8px rgba(63,209,138,.28);white-space:nowrap;
+  }
+  .mtag:empty{display:none}
+  .mtag.draw{background:linear-gradient(180deg,#7fb4ff,#4a86dd);color:#06152a;
+             box-shadow:0 2px 8px rgba(127,180,255,.26)}
+  .mtag.weak{background:linear-gradient(180deg,#3a4655,#2a343f);color:#dbe4ee;box-shadow:none}
+  .msub{max-width:100%;min-width:0;
+        font-size:clamp(9.5px,1.35vh,11px);color:var(--ink2);line-height:1.25;
+        letter-spacing:-.2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .msub b{color:var(--green);font-weight:800}
+  .msub:empty{display:none}
 
   /* ───────── 칩 ───────── */
-  /* 액션 알약 + 칩을 한 줄로 (줄 수가 늘면 테이블 밖으로 잘림) */
-  .seatFoot{display:flex;align-items:center;justify-content:center;
-            gap:clamp(4px,.6vw,8px);flex-wrap:nowrap;max-width:100%}
-  .seat .betchip{display:flex;align-items:center;justify-content:center;flex:none}
-  .seat .betchip:empty{display:none}
-  /* 칩 겹침 폭은 반드시 '칩 크기' 기준으로. %를 쓰면 컨테이너 너비 기준이 되어 숫자를 덮는다 */
   .chip{
-    --chipSize:clamp(15px,2.6vh,23px);
+    --chipSize:clamp(13px,2.2vh,20px);
     width:var(--chipSize);height:var(--chipSize);border-radius:50%;
     margin-left:calc(var(--chipSize) * -0.5);position:relative;flex:none;
     box-shadow:0 3px 8px rgba(0,0,0,.6), inset 0 -3px 6px rgba(0,0,0,.35),
@@ -302,112 +518,110 @@
   .chip::after{content:'';position:absolute;inset:3px;border-radius:50%;
                border:2px dashed rgba(255,255,255,.72)}
   .chipAmt{
-    margin-left:7px;font-size:clamp(10px,1.6vh,13px);font-weight:800;color:#fff;
+    margin-left:6px;font-size:clamp(9px,1.4vh,12px);font-weight:800;color:#fff;
     text-shadow:0 1px 4px #000;font-variant-numeric:tabular-nums;white-space:nowrap;
   }
-  /* 팟이 승자에게 날아가는 칩 — 부드럽게 빨려들어가듯 */
+  /* 팟이 승자에게 날아가는 칩 */
   .flyChip{
     position:absolute;z-index:9;margin-left:0;pointer-events:none;
     transition:transform .62s cubic-bezier(.32,.72,.35,1), opacity .62s ease-in;
   }
 
   /* ───────── 하단 컨트롤 ───────── */
-  /* 높이를 '고정'한다. 최소값만 주면 확정 바·레이즈 줄이 생길 때마다
-     높이가 변하고 그만큼 테이블이 위아래로 움직인다. */
+  /* 높이를 고정한다. 상태(내 차례 ↔ 확정 ↔ 핸드 종료)가 바뀔 때마다
+     높이가 변하면 그만큼 위쪽 화면이 통째로 움직인다. */
   #controls{
-    flex:none;padding:var(--pad) clamp(10px,1.4vw,20px) clamp(9px,1.4vh,16px);
-    display:flex;flex-direction:column;align-items:center;gap:clamp(5px,.9vh,9px);
-    /* 터치 타깃을 44px로 키우면서 내용이 커졌다. 예전 값(19.5vh, 최대 178px)으로는
-       900×750 이하 창에서 내용이 칸을 넘어 버튼 아랫부분이 잘렸다(원본도 800×700에서
-       이미 5px 잘리고 있었다). 실측 최대 184px을 덮도록 다시 잡는다. */
-    height:clamp(186px,24vh,196px);justify-content:flex-start;overflow:hidden;
+    flex:none;padding:clamp(5px,.9vh,10px) clamp(10px,1.4vw,20px) clamp(7px,1.2vh,14px);
+    display:flex;flex-direction:column;align-items:stretch;gap:clamp(4px,.7vh,7px);
+    height:clamp(164px,21vh,186px);justify-content:flex-start;overflow:hidden;
   }
-  /* 줄바꿈으로 높이가 늘지 않게 — 좁으면 가로 스크롤 */
-  .ctlRow{display:flex;gap:clamp(5px,.7vw,9px);align-items:center;justify-content:center;
+  .ctlRow{display:flex;gap:clamp(4px,.7vw,8px);align-items:center;justify-content:center;
           flex-wrap:nowrap;width:100%;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
   .ctlRow::-webkit-scrollbar{display:none}
-  .ctlInfo{justify-content:flex-start;min-height:20px}
-  #turnHint{color:var(--gold);font-weight:800;font-size:clamp(11.5px,1.7vh,13.5px);flex-shrink:0}
-  /* 팟 오즈를 퍼센트가 아니라 '판수'로 보여준다.
-     근거: 자연빈도(20판 중 8판)가 확률(42%)보다 이해도가 높고, 아이콘 배열은
-     수리력이 낮은 사람에게 특히 효과가 크다. 코치 지시문 1번 규칙도 이미
-     비율 표기를 금지하고 횟수로 말하게 되어 있어, 화면과 코치의 언어가 같아진다. */
-  #oddsHint{
-    flex:1;min-width:0;
-    font-size:clamp(11px,1.6vh,12.5px);color:var(--ink2);
-    background:rgba(255,255,255,.05);border:1px solid var(--line);
-    border-radius:10px;padding:5px 10px;font-variant-numeric:tabular-nums;
-    display:flex;flex-direction:column;gap:4px;
-  }
-  /* 한 칸 = 5% = 20판 중 1판 */
-  .fbar{position:relative;display:flex;gap:2px;height:11px;flex:none}
-  .fcell{flex:1;min-width:0;border-radius:2px;background:rgba(255,255,255,.07)}
-  .fcell.even{background:linear-gradient(90deg,var(--green2) var(--f,100%),rgba(255,255,255,.07) 0)}
-  .fcell.gain{background:linear-gradient(90deg,var(--green) var(--f,100%),rgba(255,255,255,.07) 0)}
-  .fneed{position:absolute;top:-3px;bottom:-3px;width:2px;margin-left:-1px;
-         background:#fff;border-radius:1px;box-shadow:0 0 0 1px rgba(0,0,0,.55)}
-  /* 판정 문구까지 다 보여야 하므로 줄바꿈 허용 — 잘리면 초보가 결론을 못 읽는다 */
-  .ftext{font-size:clamp(11.5px,1.7vh,13px);color:var(--ink2);line-height:1.35;
-         word-break:keep-all;overflow-wrap:break-word}
-  .ftext .good,.ftext .bad{white-space:nowrap}
-  .ftext b{color:var(--ink);font-weight:800}
-  /* 코치 상태 알약이 같은 줄을 쓸 때는 폭이 좁아지므로 줄바꿈을 허용한다 (잘리면 검산이 안 된다) */
-  .fsub{font-size:clamp(9.5px,1.35vh,11px);color:var(--ink3);line-height:1.3;
-        word-break:keep-all;overflow-wrap:break-word}
-  #oddsHint:empty{display:none}
-  /* 선행 분석 진행 표시 — 도는 중인지 준비됐는지 한눈에 */
-  #preState{font-size:clamp(11px,1.6vh,12.5px);font-weight:800;border-radius:999px;
-            padding:4px 11px;border:1px solid var(--line);white-space:nowrap}
-  #preState:empty{display:none}
-  #preState.work{color:#ffd270;border-color:rgba(255,210,112,.4);background:rgba(255,210,112,.10)}
-  #preState.ready{color:#7ee2a8;border-color:rgba(126,226,168,.45);background:rgba(126,226,168,.12)}
-  #preState.fail{color:var(--red);border-color:rgba(255,138,122,.4);background:rgba(255,138,122,.10)}
-  #oddsHint .good{color:#7ee2a8;font-weight:800}
-  #oddsHint .bad{color:var(--red);font-weight:800}
-  #btnReserveFold{margin-left:auto;font-size:12px;padding:6px 12px}
+  .ctlInfo{justify-content:flex-start;min-height:0;overflow:visible}
+  /* 콜 버튼 위 '코치 추천' 표가 잘리지 않도록 이 줄만 위쪽 여백을 둔다 */
+  .ctlMain{overflow:visible;padding-top:9px}
+  .ctlInfo:empty{display:none}
+  #turnHint{color:var(--gold);font-weight:800;font-size:clamp(11.5px,1.7vh,13.5px);flex:none}
+  #turnHint:empty{display:none}
+  #btnReserveFold{margin-left:auto;font-size:12px;padding:6px 12px;flex:none}
   #btnReserveFold.on{background:linear-gradient(180deg,#a3453a,#7a2f27);border-color:#c0604f;color:#fff}
 
-  /* 주요 행동 버튼 — 입체 */
-  #btnFold{background:linear-gradient(180deg,#3a444f,#252c35);color:#dfe6ee;
-           padding:clamp(10px,1.8vh,15px) clamp(18px,2.4vw,30px);font-size:clamp(13px,2vh,15.5px)}
-  #btnCall{background:linear-gradient(180deg,#3fc27c,#1f8a53);color:#04220f;border-color:#2c9a60;
-           padding:clamp(10px,1.8vh,15px) clamp(18px,2.4vw,30px);font-size:clamp(13px,2vh,15.5px);
-           box-shadow:0 6px 20px rgba(63,194,124,.32), inset 0 1px 0 rgba(255,255,255,.34)}
-  #btnRaise{background:linear-gradient(180deg,#ffd270,#e0a534);color:#2a1c00;border-color:#e6b249;
-            padding:clamp(10px,1.8vh,15px) clamp(16px,2.2vw,26px);font-size:clamp(13px,2vh,15.5px);
-            box-shadow:0 6px 20px rgba(224,165,52,.3), inset 0 1px 0 rgba(255,255,255,.4)}
+  /* 행동 버튼 — 금액 부제가 붙은 2줄 버튼 */
+  #btnFold,#btnCall,#btnRaise{
+    height:clamp(46px,7vh,54px);min-height:46px;border-radius:12px;padding:0 6px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+    position:relative;box-shadow:0 4px 10px rgba(0,0,0,.34);
+  }
+  #btnFold .t,#btnCall .t,#btnRaise .t{
+    font-size:clamp(13px,1.95vh,15px);font-weight:800;letter-spacing:-.4px;line-height:1.05;
+    white-space:nowrap}
+  #btnFold .s2,#btnCall .s2,#btnRaise .s2{
+    font-size:clamp(9.5px,1.35vh,11px);font-weight:700;letter-spacing:-.2px;line-height:1.05;
+    white-space:nowrap;opacity:.85}
+  #btnFold{flex:1 1 0;min-width:0;background:linear-gradient(180deg,#222c38,#1a222c);color:#c3cedb}
+  #btnFold .s2{color:var(--ink3);opacity:1}
+  #btnCall{
+    flex:1.25 1 0;min-width:0;
+    background:linear-gradient(180deg,#4ae095,#25a468);border-color:#57e9a0;color:#08180f;
+    box-shadow:0 5px 16px rgba(63,209,138,.26), inset 0 1px 0 rgba(255,255,255,.35);
+  }
+  #btnCall .s2{color:rgba(8,24,15,.72);opacity:1}
+  #btnRaise{
+    flex:1.3 1 0;min-width:0;
+    background:linear-gradient(180deg,rgba(245,196,99,.2),rgba(245,196,99,.07));
+    border-color:rgba(245,196,99,.5);color:var(--gold);
+  }
+  #btnRaise .t{color:var(--gold)}
+  #btnRaise .s2{color:#d3a44b;opacity:1}
+  #btnFold:hover{background:linear-gradient(180deg,#2b3644,#212a35)}
+  #btnCall:hover{background:linear-gradient(180deg,#57e9a0,#2ab473)}
+  #btnRaise:hover{background:linear-gradient(180deg,rgba(245,196,99,.28),rgba(245,196,99,.12))}
+  /* 즉시 판정이 콜을 권할 때만 뜨는 표 */
+  .rec-pin{
+    position:absolute;top:-8px;left:50%;transform:translateX(-50%);
+    font-size:9.5px;font-weight:800;color:#08180f;
+    background:#eafff4;border:1px solid #57e9a0;
+    padding:1px 8px;border-radius:99px;white-space:nowrap;
+    box-shadow:0 2px 8px rgba(0,0,0,.4);pointer-events:none;z-index:3;
+  }
   #btnNext{background:linear-gradient(180deg,#4a7ad6,#2b539c);border-color:#5183dd;color:#fff}
   #btnReview,#btnThoughts,#btnSaveHand{background:linear-gradient(180deg,#2e3742,#1e252e)}
 
+  /* 베팅 크기 조절 */
   #raiseBox{
     display:flex;flex-wrap:nowrap;gap:clamp(4px,.6vw,7px);align-items:center;max-width:100%;
-    background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:12px;padding:6px 9px;
     overflow-x:auto;scrollbar-width:none;
   }
   #raiseBox::-webkit-scrollbar{display:none}
   #raiseBox > *{flex:none}
   #raiseSlider{width:clamp(80px,11vw,160px);accent-color:var(--gold2)}
   #raiseAmt{
-    width:clamp(78px,8vw,104px);padding:clamp(8px,1.3vh,12px);border-radius:9px;
-    border:1px solid var(--line2);background:var(--sunken);color:var(--ink);
-    text-align:right;font-size:clamp(13px,1.9vh,15px);font-weight:800;font-family:inherit;
+    width:clamp(88px,9vw,120px);padding:0 10px;border-radius:9px;
+    border:1px solid var(--line3);background:#0f151c;color:var(--ink);
+    text-align:right;font-size:16px;font-weight:800;font-family:inherit;
+    font-variant-numeric:tabular-nums;
   }
-  .preset,.nudge{padding:clamp(7px,1.2vh,10px) clamp(9px,1.1vw,13px);font-size:clamp(11.5px,1.7vh,13px);
-                 color:var(--ink2)}
+  .preset,.nudge{
+    padding:0 clamp(8px,1vw,13px);font-size:clamp(11.5px,1.65vh,13px);color:var(--ink2);
+    border-radius:9px;border:1px solid var(--line3);
+    background:linear-gradient(180deg,#212c39,#1a232d);
+  }
+  .preset{flex:1 1 0;min-width:0}
 
   /* 2단계 확정 */
   #pendingBox{
     display:none;align-items:center;gap:clamp(5px,.7vw,9px);max-width:100%;
-    background:rgba(255,210,112,.08);border:1px solid rgba(255,210,112,.3);
-    border-radius:12px;padding:9px 12px;
+    background:rgba(245,196,99,.08);border:1px solid rgba(245,196,99,.3);
+    border-radius:12px;padding:7px 10px;
   }
-  #pendingText{font-size:clamp(12px,1.8vh,13.5px);font-weight:800;color:var(--gold);white-space:nowrap}
+  #pendingText{font-size:clamp(11.5px,1.7vh,13.5px);font-weight:800;color:var(--gold);white-space:nowrap}
   #whyInput{
-    flex:1;min-width:150px;padding:clamp(8px,1.3vh,11px) 12px;border-radius:9px;
+    flex:1;min-width:120px;padding:0 12px;border-radius:9px;
     border:1px solid #3d3a2b;background:#0f1117;color:var(--ink);font-size:16px;font-family:inherit;
   }
   #whyInput::placeholder{color:var(--ink3)}
-  #btnConfirm{background:linear-gradient(180deg,#3fc27c,#1f8a53);color:#04220f;border-color:#2c9a60}
+  #btnConfirm{background:linear-gradient(180deg,#3fd18a,#1f8a53);color:#04220f;border-color:#2c9a60}
   #btnRethink{background:linear-gradient(180deg,#7a4a30,#5a3522);color:#ffe0c8;border-color:#8a5638}
 
   /* ───────── 코치 패널 ───────── */
@@ -432,7 +646,7 @@
   .cmsg .verdict{display:block;font-weight:800;color:var(--gold);font-size:15.5px;
                  margin-bottom:6px;padding-bottom:5px;border-bottom:1px dashed #3c4552}
   .cmsg .term{text-decoration:none;border-bottom:1.5px dotted var(--green);color:#7ee2a8;cursor:help}
-  .cmsg .term:hover{background:rgba(63,194,124,.16)}
+  .cmsg .term:hover{background:rgba(63,209,138,.16)}
 
   .oldChat{background:#12181f;border:1px solid var(--line);border-radius:9px;padding:5px 11px}
   .oldChat summary{cursor:pointer;font-size:12px;color:var(--ink3);user-select:none}
@@ -442,9 +656,9 @@
   #applyDock.on{display:block}
   .applyRow{margin:2px 0 8px}
   .applyBtn{
-    width:100%;background:linear-gradient(180deg,#3fc27c,#1f8a53);color:#04220f;
+    width:100%;background:linear-gradient(180deg,#3fd18a,#1f8a53);color:#04220f;
     border:1px solid #2c9a60;border-radius:12px;padding:13px;font-size:14px;font-weight:800;
-    box-shadow:0 6px 18px rgba(63,194,124,.3), inset 0 1px 0 rgba(255,255,255,.3);
+    box-shadow:0 6px 18px rgba(63,209,138,.3), inset 0 1px 0 rgba(255,255,255,.3);
   }
   .applyBtn:disabled{opacity:.35}
 
@@ -472,9 +686,6 @@
   #logBox summary:hover{color:var(--ink)}
   #logBox summary .hint{font-weight:400;font-size:10.5px;color:var(--ink3)}
   #logBox[open] summary .hint{display:none}
-  #logResize{flex:none;height:8px;cursor:row-resize;display:flex;align-items:center;justify-content:center}
-  #logResize::after{content:'';width:46px;height:3px;border-radius:2px;background:#2f3945}
-  #logResize:hover::after,#logResize.drag::after{background:var(--green)}
   #log{
     height:150px;overflow-y:auto;padding:2px 1px 10px;
     font-size:12.5px;line-height:1.85;color:#98a6b4;
@@ -492,11 +703,7 @@
   #copyToast{font-size:12px;color:#7ee2a8;margin-top:5px}
 
   /* ───────── 오버레이 ───────── */
-  /* 가이드 패널은 폰에서 화면의 94%를 덮어 상단바의 [가이드 닫기] 버튼까지 가린다.
-     어두운 배경에도 닫기 동작이 없어서, 한 번 열면 빠져나올 길이 없었다.
-     패널 안에 닫기 버튼을 두고, 배경 탭과 Esc 키로도 닫히게 한다. */
-  /* #ref에 transform이 걸려 있어 이 fixed 버튼은 패널을 기준으로 자리를 잡는다.
-     패널 내용이 길게 스크롤돼도 닫기 버튼은 늘 오른쪽 위에 그대로 있다. */
+  /* #ref에 transform이 걸려 있어 이 fixed 버튼은 패널을 기준으로 자리를 잡는다. */
   #refClose{
     position:fixed;top:10px;right:10px;z-index:3;
     width:44px;height:44px;min-width:44px;min-height:44px;
@@ -519,17 +726,11 @@
 
   /* ═════════════════════════════════════════════════════════════════
      터치 타깃 크기 — 손가락으로 누를 수 있는 크기를 보장한다.
-
-     기준: 매 판 쓰는 본화면 조작은 44×44 (애플 휴먼 인터페이스 가이드라인,
-     WCAG 2.5.5 향상 수준 AAA). 설정·패널처럼 가끔 쓰는 것은 최소 24×24에
-     24px 간격 (WCAG 2.2에 추가된 2.5.8 최소 수준 AA의 간격 예외).
-
-     왜: 이 화면을 390×844에서 재보니 누를 수 있는 요소 48종이 전부 44px보다
-     작았다. 가장 작은 건 체크박스 13×13이었다. 손가락 끝은 그보다 훨씬 굵다.
-     체크박스는 상자를 키우는 대신 라벨 전체를 타깃으로 만든다 — 글자까지
-     눌리는 게 더 정확하고 자리도 덜 쓴다.
+     기준: 매 판 쓰는 본화면 조작은 44×44 (애플 HIG, WCAG 2.5.5 AAA).
+     설정·패널처럼 가끔 쓰는 것은 최소 24×24에 24px 간격 (WCAG 2.5.8 AA).
+     체크박스는 상자를 키우는 대신 라벨 전체를 타깃으로 만든다.
      ═════════════════════════════════════════════════════════════════ */
-  #controls button,#topbar button,#side button{min-height:44px}
+  #controls button,#controls input,#topbar button,#side button{min-height:44px}
   #refToggle,#sndToggle{min-width:44px;min-height:44px;padding:7px 12px;font-size:12.5px;
     align-items:center;justify-content:center;gap:5px}
   #refToggle{display:inline-flex}
@@ -548,7 +749,7 @@
     background:var(--sunken);color:var(--ink);border:1px solid var(--line2);cursor:pointer}
 
   /* 행동·베팅 조작 */
-  #btnFold,#btnCall,#btnRaise,#btnReserveFold{min-height:44px}
+  #btnReserveFold{min-height:44px}
   .preset,.nudge{min-height:44px;min-width:44px}
   #raiseAmt,#whyInput{min-height:44px}
   #btnWhySend,#btnConfirm,#btnRethink{min-height:44px}
@@ -563,9 +764,10 @@
   #logBox > summary{min-height:44px;display:flex;align-items:center;gap:6px;cursor:pointer}
   #toolsBox > summary{min-height:44px;display:flex;align-items:center;gap:6px;cursor:pointer}
   /* 로그 높이 조절 손잡이: 보이는 선은 가늘게, 잡는 영역은 24px (WCAG 2.5.8 간격 예외) */
-  #logResize{height:24px;display:flex;align-items:center;justify-content:center}
+  #logResize{flex:none;height:24px;cursor:row-resize;display:flex;align-items:center;justify-content:center}
   #logResize::after{content:'';display:block;width:46px;height:4px;border-radius:2px;
     background:var(--line2);pointer-events:none}
+  #logResize:hover::after,#logResize.drag::after{background:var(--green)}
 
   /* ───────── 반응형 (배치가 달라지는 것만) ───────── */
   @media (max-width:1200px){ #side{width:clamp(290px,30vw,350px)} }
@@ -573,7 +775,6 @@
   @media (max-width:950px){
     body{flex-direction:column}
     #main{flex:1;min-height:0}
-    #tableWrap{min-height:0}
     #side{
       position:fixed;left:0;right:0;bottom:0;z-index:70;width:100%;
       height:80vh;height:80dvh;padding:0 12px 12px;
@@ -591,14 +792,10 @@
     #chatArrow{margin-left:auto;color:var(--ink3)}
     #chatBadge.show + #chatArrow{margin-left:8px}
     #log{height:108px}
-    #controls{margin-bottom:46px}
+    #controls{margin-bottom:46px}      /* 하단 코치 서랍 손잡이 자리 */
     #raiseSlider{display:none}
     #raiseBox{width:100%;justify-content:center}
-    #raiseAmt{width:96px}
-    /* 좁은 화면은 확정 바가 두 줄이 되므로 컨트롤 높이를 그만큼 더 고정.
-       터치 타깃 44px 적용 후 실측 최대는 184px이다(900×750 기준). 예전 값으로는
-       750px 이하 높이에서 버튼 아랫부분이 잘렸다. */
-    #controls{height:clamp(186px,26vh,200px)}
+    #controls{height:clamp(164px,22vh,190px)}
     #pendingBox{flex-wrap:wrap;overflow:visible}
     #pendingText{flex:1 1 100%}
     #whyInput{flex:1 1 100%;min-width:0}
@@ -607,12 +804,11 @@
 
   @media (max-width:620px){
     /* 폰에서는 상단바를 한 줄로 고정하고, 없어도 되는 글자를 접어 전부 들어가게 한다 */
-    #topbar{font-size:11.5px;gap:7px;flex-wrap:nowrap;min-height:48px}
+    #topbar{font-size:11.5px;gap:7px;flex-wrap:nowrap;min-height:48px;padding:0 8px}
     #topbar span.tag:nth-of-type(3),#topbar span.tag:nth-of-type(4){display:none}
     #topbar .wLong{display:none}
-    #sndToggle{display:inline-flex}
     #refToggle{flex:none}
-    #sndToggle{display:inline-block}
+    #sndToggle{display:inline-flex}
     #sndGroup{
       display:none;position:fixed;top:46px;left:8px;z-index:80;
       background:#1b222b;border:1px solid var(--line2);border-radius:10px;
@@ -621,116 +817,87 @@
     }
     #sndGroup.open{display:flex}
     #sndVol{width:70px !important}
-    /* 폰에서 보드가 가운데 칸(121px)을 넘어 242px로 퍼지면서 좌우 자리 이름표를
-       덮고 카드를 가렸다. 가운데 칸을 넓히고 보드·상대 카드를 그 칸에 맞게 줄인다.
-       대신 내 카드는 키워서, 화면에서 내 패가 가장 큰 카드가 되게 한다. */
-    #table{padding:5px 7px;
-      grid-template-columns:minmax(0,1fr) minmax(0,2fr) minmax(0,1fr)}
-    .card{width:clamp(23px,4vh,30px);height:clamp(32px,5.6vh,42px)}
-    #seat0 .cards .card{width:clamp(34px,6.4vh,48px);height:clamp(47px,8.9vh,66px)}
-    /* 좌우 자리는 칸이 좁아 아바타와 글자를 나란히 두면 이름·스택이 심하게 잘린다.
-       아바타를 위로 올려 쌓으면 글자가 칸 너비를 통째로 쓴다. 내 자리는 가운데 넓은
-       칸이라 가로 배치를 유지한다. */
-    #seat1 .box,#seat3 .box{flex-direction:column;align-items:center;gap:1px;text-align:center}
-    #seat1 .binfo,#seat3 .binfo{text-align:center;width:100%}
-    #seat1 .pod,#seat3 .pod{width:clamp(20px,3.4vh,26px);height:clamp(20px,3.4vh,26px);
-                            font-size:clamp(10px,1.7vh,13px)}
-    .seat .ptype{display:none}
+    #hud,#tableWrap,#controls{padding-left:8px;padding-right:8px}
     .seat .betchip{display:none}
-    .seat .contribLine .nowBet{display:inline}
+    #seat0 .seatFoot{display:none}   /* 내 마지막 액션은 명찰의 "판 N · 지금 N"과 겹친다 */
+    #boardArea{gap:3px 5px}
+    #potLine{font-size:clamp(10.5px,1.5vh,12.5px);padding:2px 9px}
+    /* 폰: 내 손익 줄은 짧은 표기로 (긴 문구가 자리를 다 먹는다) */
+    #seat0 .rbFull{display:none}
+    #seat0 .rbShort{display:inline}
     .slotLabel{display:none}
-    #controls{gap:4px;padding:5px 8px}   /* 폰: 줄 간격·여백을 조금 줄여 세로 공간 확보 */
-    /* ── 베팅 줄(최소·½팟·팟·올인·−100·금액·+100·레이즈)을 두 줄로 ──
-       실측(390px 폰): 한 줄로 두면 562px가 필요한데 자리는 374px뿐. 가운데 정렬이라 양쪽이 잘리고
-       왼쪽으로 밀린 최소·½팟은 스크롤로도 닿지 않는다. 글자를 줄여도 190px은 못 줄이므로 줄을 나눈다.
-       위 줄: 프리셋 4개가 각 25% / 아래 줄: −100·금액·+100은 제 크기, 레이즈가 남은 폭을 전부 채움 */
-    #raiseBox{flex-wrap:wrap;overflow:visible;padding:4px 6px;gap:4px}
-    #raiseBox .preset{flex:1 1 calc(25% - 4px);min-width:0;padding:6px 4px;font-size:12px}
-    #raiseBox .nudge{flex:0 0 auto;padding:7px 6px;font-size:12px}
-    #raiseBox #raiseAmt{flex:0 0 64px;width:64px;padding:6px;font-size:16px;-moz-appearance:textfield} /* 폰 입력칸 16px 규칙 (iOS 확대 방지) */
-    #raiseAmt::-webkit-inner-spin-button,#raiseAmt::-webkit-outer-spin-button{-webkit-appearance:none;margin:0} /* 좁은 창의 PC 브라우저에서 스피너가 숫자를 가리는 것 방지 (−100/+100 버튼이 있음) */
-    #raiseBox #btnRaise{flex:1 1 0;min-width:0;padding:7px 8px;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    /* ── 베팅 줄: 프리셋 4개 / −100·금액·+100 두 줄로 ──
+       한 줄로 두면 390px 폰에서 자리가 모자라 양끝이 잘린다. */
+    #raiseBox{flex-wrap:wrap;overflow:visible;gap:4px}
+    #raiseBox .preset{flex:1 1 calc(25% - 4px);min-width:0;padding:0 4px;font-size:12px}
+    #raiseBox .nudge{flex:1 1 0;min-width:44px;padding:0 6px;font-size:12.5px}
+    #raiseBox #raiseAmt{flex:2 1 0;min-width:76px;width:auto;padding:0 8px;font-size:16px;-moz-appearance:textfield}
+    #raiseAmt::-webkit-inner-spin-button,#raiseAmt::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
     /* 핸드 종료 줄(다음 핸드·리뷰·속마음·기록)도 4개가 한 줄엔 안 들어가므로 2×2 */
     .ctlEnd{flex-wrap:wrap;overflow:visible}
     .ctlEnd > button{flex:1 1 calc(50% - 5px);min-width:0;white-space:nowrap}
-    /* 폰에서는 "👉 내 차례" 글자를 숨긴다 — 테이블 위 초록 배너(👉 당신 차례입니다)와 중복이고,
-       이 56px 때문에 옆 승률 안내가 3~4줄로 늘어나 컨트롤 높이를 잡아먹는다 */
+    /* 폰에서는 "👉 내 차례" 글자를 숨긴다 — 위 초록 배너와 중복이다 */
     #turnHint{display:none}
-    #btnFold,#btnCall{padding:9px 18px}
-    /* 컨트롤 높이는 상태가 바뀌어도 같아야 한다. 안 그러면 내 차례 ↔ 확정 ↔ 핸드 종료로
-       넘어갈 때마다 그 차이만큼 테이블이 위아래로 튄다(이 파일 위쪽 주석의 원래 의도).
-       터치 타깃을 44px로 키우면서 가장 높은 상태(내 차례)가 커졌으므로, 그 최대값을
-       기준으로 다시 잡는다. 헤드리스 크롬 실측 최대: 375×553 → 202px, 390×664 → 222px,
-       360×740 → 228px, 390×844 → 231px, 620×900 → 214px.
-       36.5vh는 553px 화면에서 202px이 되고, 232px 상한이 나머지를 모두 덮는다. */
-    #controls{height:auto;min-height:clamp(202px,36.5vh,232px)}
-    /* 테이블: 컨트롤이 커진 만큼 카드·간격을 줄여 보드(공개 카드+팟)가 위·아래 카드와 겹치지 않게 */
-    #table{gap:6px 2px}
-    #potLine{margin-top:4px;padding:3px 10px;font-size:13px}
-    /* 자리 카드 줄 간격 정리 — 글자 크기는 그대로라 읽기에 영향이 없고,
-       스택 자릿수나 이름 길이에 따라 높이가 1px씩 흔들리던 여유를 만든다 */
-    .seat{gap:0}
-    .binfo{line-height:1.2}
-    .seat .pname,.seat .pstack,.seat .contribLine{line-height:1.22}
+    #controls{height:auto;min-height:clamp(160px,25.5vh,190px)}
+    .opp{padding:3px 5px 4px}
+    .mine{padding:5px 7px}
   }
 
-  /* 세로가 짧은 폰(주소창까지 뜬 아이폰 등). 터치 타깃 44px은 건드리지 않고,
-     대신 검산줄을 접고 테이블이 미리 잡아둔 예약 높이를 줄여 자리를 만든다.
-     누르는 크기를 줄여 공간을 버는 것은 이 작업의 목적과 정반대다. */
+  /* 세로가 짧은 폰(주소창까지 뜬 아이폰 등).
+     누르는 크기는 그대로 두고, 설명줄·여백부터 접는다. */
+  @media (max-height:620px){
+    .opp .binfo{grid-template-areas:"nm tp" "stk bet"}
+    .opp .ptype{margin:0;font-size:8px}
+    .seat.hasD .binfo{padding-right:15px}
+    .dbtn{width:15px;height:15px;font-size:8.5px;line-height:15px}
+  }
   @media (max-height:700px){
     .fsub{display:none}
-    #oddsHint{gap:3px;padding:4px 9px}
-    .fbar{height:10px}
-    #table{grid-template-rows:minmax(clamp(52px,9.4vh,84px),auto) minmax(0,1fr) minmax(clamp(72px,13vh,120px),auto);
-           gap:5px 2px;padding:4px 7px}
-    .card{width:clamp(22px,3.7vh,28px);height:clamp(30px,5.2vh,39px)}
-    #seat0 .cards .card{width:clamp(30px,5.6vh,42px);height:clamp(42px,7.8vh,58px)}
-    .pod{width:clamp(23px,4.1vh,34px);height:clamp(23px,4.1vh,34px);font-size:clamp(11px,2vh,16px)}
-    /* 보드가 자기 줄을 갖게 되면서 팟 표시가 내 카드와 닿았다. 여백만 조인다. */
-    #potLine{margin-top:2px;padding:2px 8px;font-size:12px}
-    #boardArea{gap:0}
-    /* 자리 카드의 줄 간격을 조인다 — 글자 크기는 그대로라 읽기에는 영향이 없다 */
-    .seat{gap:0}
-    .binfo{line-height:1.18}
-    .seat .pname,.seat .pstack,.seat .contribLine{line-height:1.2}
+    .gauge{gap:3px}
+    #hud{gap:4px}
+    .ctx{-webkit-line-clamp:2}
+    #boardArea{padding:4px 7px}
+    .mine{padding:4px 7px;gap:3px}
+    .opp{padding:3px 5px}
+    .opp .rebuyInfo{display:none}
   }
-  /* 아주 짧은 화면(구형 아이폰 + 주소창·툴바 둘 다 뜬 상태, 약 553px)에서는
-     승률 블록을 더 조이고 테이블 카드·아바타도 함께 줄인다.
-     이 크기에서는 원래도 위쪽 자리가 보드를 24px 덮고 있었다. */
+  /* 아주 짧은 화면(구형 아이폰 + 주소창·툴바, 약 553px) */
   @media (max-height:580px){
-    #oddsHint{gap:2px;padding:3px 8px}
-    .fbar{height:8px}
-    .ftext{line-height:1.25}
-    #controls{gap:3px;padding:5px 8px}
-    /* 위·아래 줄에 미리 잡아둔 최소 높이가 이 화면에선 테이블의 65%를 먹는다. 그 예약분을 줄인다. */
-    #table{gap:2px 2px;padding:3px 6px;
-           grid-template-rows:minmax(clamp(42px,8vh,70px),auto) minmax(0,1fr) minmax(clamp(58px,10.8vh,98px),auto)}
-    .card{width:clamp(20px,3.4vh,26px);height:clamp(28px,4.8vh,36px)}
-    #seat0 .cards .card{width:clamp(27px,5.1vh,38px);height:clamp(37px,7.1vh,53px)}
-    .pod{width:clamp(20px,3.6vh,30px);height:clamp(20px,3.6vh,30px);font-size:clamp(10px,1.8vh,14px)}
-    #potLine{margin-top:2px;padding:2px 8px;font-size:11.5px}
-    /* 자리 카드를 압축한다. 이 화면에서 위쪽 자리가 93px이라 보드를 덮고 있었다.
-       베팅 금액(지금 N)은 판단에 필요하므로 남기고, 줄 간격·글자만 조인다. */
+    #msgRow{min-height:24px}
+    #msg{font-size:11.5px;padding:2px 10px;min-height:22px}
+    .gauge{padding:4px 8px;gap:2px}
+    .ghead .gv{font-size:16px}
+    .ftext{line-height:1.22}
+    .ctx{-webkit-line-clamp:1;line-height:1.25}
+    .cav{width:24px;height:24px;font-size:12px;border-radius:7px}
+    .bubble{padding:3px 8px 4px 9px}
+    #boardArea{padding:3px 6px;gap:5px}
+    .mine{padding:3px 6px;gap:6px}
+    #hud{gap:2px;padding-top:2px}
+    .gauge{padding:3px 8px}
+    .rec-pin{top:-7px}
+    .ctlMain{padding-top:5px}
     .seat{gap:0}
+    .opp .seat{gap:0}
+    .msub{font-size:9.5px}
+    #controls{gap:3px}
+    #table{gap:3px}
+    #actPreview{display:none}   /* 세로가 아주 짧으면 무대가 먼저다 */
+    /* 글자 크기는 읽을 수 있는 선에서 줄 간격만 조인다 (누르는 크기는 건드리지 않는다) */
     .seat .pname{font-size:11px;line-height:1.15}
-    .seat .pstack{font-size:13px;line-height:1.15}
-    .seat .contribLine{font-size:9.5px;line-height:1.15}
-    .binfo{line-height:1.15}
-    .box{padding:3px 5px}
-    /* 코치 분석 상태는 이 화면에서만 접는다. 같은 내용이 코치 패널 제목 옆에도 뜨고,
-       이 알약이 124px을 먹는 바람에 승률 문장이 두 줄로 늘어나 있었다. */
-    #preState{display:none}
-    #potLine{margin-top:1px}
-    #boardArea{gap:0}
-    /* 상단 고정 영역은 순수 여백이라 가장 먼저 줄인다 (누르는 크기는 그대로 둔다) */
-    /* 상단바는 44px 버튼이 들어가야 하므로 더 줄이지 않는다. 대신 배너 줄에서 벌어온다. */
-    #topbar{gap:5px;padding:0 8px}
-    #msgRow{min-height:26px;padding:0 8px}
-    #msg{font-size:12px;padding:2px 11px}
+    .seat .ptype{font-size:8.5px;line-height:1.15}
+    .seat .pstack{font-size:12.5px;line-height:1.15}
+    .seat .contribLine{font-size:9px;line-height:1.15;padding:0 4px}
+    .opp{padding:2px 4px}
+    .mine{padding:2px 6px}
+    #boardArea{padding:2px 6px}
+    .mtag{font-size:10.5px;padding:1px 7px}
+    .ghead .gv{font-size:15px}
+    .seat .winBadge{font-size:9.5px;padding:0 7px;line-height:1.35}
+    #seat0 .rebuyInfo{display:none}   /* 세션 손익은 넓은 화면에서만 (여기선 카드가 먼저다) */
     /* 판정 문구의 괄호 설명을 접어 한 줄로 만든다 (결론 자체는 그대로 보인다) */
     .ftext .note{display:none}
   }
-
 </style>
 </head>
 <body>
@@ -743,7 +910,6 @@
 <div class="refCol">
   <div class="rTitle">📈 내 승률 (추정)</div>
   <div id="equityVal">—</div>
-  <div id="handTier" style="font-size:12.5px; color:#ffd54f; font-weight:700; margin-top:2px;"></div>
   <div class="rNote" id="equityNote">내 카드 + 공개된 카드 기준, 상대가 무작위 핸드라고 가정한 시뮬레이션 추정치</div>
 
   <div class="rTitle">🂡 시작 핸드 등급 (처음 2장)</div>
@@ -913,29 +1079,60 @@
   <!-- 안내 배너: 테이블 밖에 절대배치하면 화면이 납작할 때 잘리므로 정상 흐름의 한 줄로 -->
   <div id="msgRow"><div id="msg"></div></div>
 
+  <!-- 학습 헤드업: 승률 게이지와 코치 한마디를 화면 위쪽 1급 자리에 둔다.
+       (예전에는 승률이 화면 맨 아래 컨트롤 칸 안에 끼어 있어 눈이 가지 않았다) -->
+  <div id="hud">
+    <section class="gauge" id="eqGauge">
+      <div class="ghead">
+        <span class="gl" id="hudLabel">20판 중</span>
+        <span class="gv" id="hudEq">—</span>
+        <span class="gu" id="hudEqUnit"></span>
+        <span class="gbadge" id="hudBadge">패를 기다리는 중</span>
+      </div>
+      <div id="oddsHint"></div>
+    </section>
+    <section class="coach">
+      <div class="cav" aria-hidden="true">🎓</div>
+      <div class="bubble">
+        <div class="chead">
+          <span class="cname">코치</span>
+          <span id="preState"></span>
+          <span class="cstat" id="hudState"><i></i>준비</span>
+        </div>
+        <div class="ctx" id="hudCoach">패가 깔리면 여기서 한마디 해줄게요.</div>
+      </div>
+    </section>
+    <!-- 내 차례가 오기 전에 각 선택이 얼마인지 미리 보여주는 줄 -->
+    <div class="acts off" id="actPreview"></div>
+  </div>
+
   <div id="tableWrap">
     <div id="table">
+      <!-- 상대 3명: 가로 정보칩 (아바타 원·펠트 테이블 없음) -->
+      <div class="opps">
+        <div class="opp"><div class="seat" id="seat1"></div></div>
+        <div class="opp"><div class="seat" id="seat2"></div></div>
+        <div class="opp"><div class="seat" id="seat3"></div></div>
+      </div>
       <div id="boardArea">
         <div id="board"></div>
         <div id="potLine">팟: 0</div>
       </div>
-      <div class="seat" id="seat1"></div>
-      <div class="seat" id="seat2"></div>
-      <div class="seat" id="seat3"></div>
-      <div class="seat" id="seat0"></div>
+      <!-- 내 패 + 지금 무슨 패인지 알려주는 상태 꼬리표 -->
+      <div class="mine">
+        <div class="seat" id="seat0"></div>
+        <div class="mymeta">
+          <span id="handTier" class="mtag"></span>
+          <span id="handNote" class="msub"></span>
+        </div>
+      </div>
     </div>
   </div>
 
   <div id="controls">
     <div class="ctlRow ctlInfo">
       <span id="turnHint"></span>
-      <span id="oddsHint"></span>
-      <span id="preState"></span>
       <button id="btnReserveFold" style="display:none">🚫 폴드 예약</button>
-    </div>
-    <div class="ctlRow ctlMain">
-      <button id="btnFold">폴드</button>
-      <button id="btnCall">콜</button>
     </div>
     <div class="ctlRow" id="raiseBox">
       <button class="preset" data-p="min">최소</button>
@@ -946,7 +1143,11 @@
       <button class="nudge" id="btnMinus">−100</button>
       <input type="number" id="raiseAmt" step="100">
       <button class="nudge" id="btnPlus">+100</button>
-      <button id="btnRaise">레이즈</button>
+    </div>
+    <div class="ctlRow ctlMain">
+      <button id="btnFold"><span class="t">폴드</span><span class="s2">0원</span></button>
+      <button id="btnCall"><span class="t">콜</span><span class="s2">0원</span></button>
+      <button id="btnRaise"><span class="t">레이즈</span><span class="s2">0원</span></button>
     </div>
     <div class="ctlRow" id="pendingBox">
       <span id="pendingText"></span>
@@ -2268,23 +2469,30 @@ function showControls(){
   }
   turnHint.textContent='👉 내 차례';
   btnFold.disabled = toCall===0;
-  btnCall.textContent = toCall===0 ? '체크' :
-    (toCall>=me.stack ? '올인 콜 ('+me.stack+')' : '콜 '+toCall);
+  // 버튼에 금액 부제를 붙인다 (무엇을 누르는지 + 얼마가 나가는지를 같이 보여준다)
+  btnCall.innerHTML = toCall===0
+    ? '<span class="t">체크</span><span class="s2">0원</span>'
+    : (toCall>=me.stack
+        ? '<span class="t">올인 콜</span><span class="s2">'+me.stack.toLocaleString()+'원</span>'
+        : '<span class="t">콜</span><span class="s2">'+toCall.toLocaleString()+'원</span>');
 
   const minTo = Math.min(state.currentBet + state.minRaiseSize, me.streetBet+me.stack);
   const maxTo = me.streetBet + me.stack;
   if(maxTo > state.currentBet){
     raiseBox.style.display='flex';
+    btnRaise.style.display='';
     slider.min=minTo; slider.max=maxTo; slider.step=100; slider.value=minTo;
     amtInput.min=minTo; amtInput.max=maxTo; amtInput.value=minTo;
     updateRaiseBtn();
-  } else raiseBox.style.display='none';
+  } else { raiseBox.style.display='none'; btnRaise.style.display='none'; }
 }
 function updateRaiseBtn(){
   const me=players[0];
   const v = +amtInput.value || +slider.value;
-  btnRaise.textContent = (v>=me.streetBet+me.stack?'올인 ':'') +
-    (state.currentBet>0?'레이즈 → ':'벳 ') + v.toLocaleString();
+  const head = (v>=me.streetBet+me.stack) ? '올인'
+             : (state.currentBet>0 ? '레이즈' : '벳');
+  btnRaise.innerHTML = '<span class="t">'+head+'</span>'
+    + '<span class="s2">'+v.toLocaleString()+'원 확정</span>';
 }
 slider.oninput=()=>{ amtInput.value=slider.value; updateRaiseBtn(); };
 // 100원 단위 업/다운 버튼
@@ -3408,6 +3616,363 @@ document.getElementById('tableWrap').addEventListener('click', ()=> setRef(false
 document.addEventListener('keydown', e => {
   if(e.key === 'Escape' && document.getElementById('ref').classList.contains('open')) setRef(false);
 });
+
+
+/* ═══════════════ 학습 화면(HUD) — 표시 전용 ═══════════════
+   여기서부터는 "이미 계산된 값을 어디에 어떻게 보여줄지"만 다룬다.
+   게임 규칙·봇 판단·승률 계산·코치 통신은 한 줄도 건드리지 않고,
+   기존 render/showControls/hideControls/addChat 를 감싸서(wrap)
+   원래 동작이 끝난 뒤에 위쪽 게이지·말풍선·꼬리표를 다시 그린다.
+   코치 서버가 꺼져 있어도 아래 문구는 전부 게임이 스스로 만든다. */
+
+const HUD = {
+  label: document.getElementById('hudLabel'),
+  eq:    document.getElementById('hudEq'),
+  unit:  document.getElementById('hudEqUnit'),
+  badge: document.getElementById('hudBadge'),
+  gauge: document.getElementById('eqGauge'),
+  odds:  document.getElementById('oddsHint'),
+  coach: document.getElementById('hudCoach'),
+  cstat: document.getElementById('hudState'),
+  preview: document.getElementById('actPreview'),
+  tier:  document.getElementById('handTier'),
+  note:  document.getElementById('handNote'),
+};
+
+/* 성향 태그 색: 프로급 파랑 / 초보·신중 회색 / 초보·과감 노랑 */
+const HUD_TYPE_CLASS = { '프로급 고수':'t-pro', '초보·신중':'t-tight', '초보·과감':'t-loose' };
+function paintTypeTags(){
+  players.forEach(p=>{
+    const seat = document.getElementById('seat'+p.seat);
+    if(!seat) return;
+    const tag = seat.querySelector('.ptype');
+    const cls = HUD_TYPE_CLASS[p.typeLabel];
+    if(tag && cls) tag.classList.add(cls);
+    // 딜러 버튼(D)이 붙은 자리만 오른쪽 위를 비워 둔다 — 성향 태그를 덮지 않게
+    if(seat.querySelector('.dbtn')) seat.classList.add('hasD');
+    // 마지막 액션 알약 색: 벳·레이즈 노랑 / 콜·체크 회색 / 폴드 빨강
+    const act = seat.querySelector('.lastAct');
+    if(act){
+      const t = act.textContent || '';
+      act.classList.add(/폴드/.test(t) ? 'b-fold'
+        : /레이즈|올인|벳/.test(t) ? 'b-bet' : 'b-call');
+    }
+  });
+}
+
+/* 지금 콜에 필요한 승률 — showControls 와 같은 식을 읽기만 한다 (계산을 바꾸지 않는다) */
+function hudCallInfo(){
+  const me = players[0];
+  const toCall = state.currentBet - me.streetBet;
+  if(toCall <= 0) return null;
+  const pot = potTotal();
+  return { toCall: toCall, pot: pot, need: Math.round(toCall/(pot+toCall)*100) };
+}
+/* 콜 금액이 있고 내 차례면 #oddsHint 는 게임(freqOdds)이 채운다 */
+function hudGameOwnsOdds(){ return humanTurn() && hudCallInfo() !== null; }
+
+/* 콜 금액이 없을 때 쓰는 20칸 배열 (한 칸 = 20판 중 1판) */
+function hudBar(eqPct){
+  const N = 20, STEP = 100/N;
+  let cells = '';
+  for(let i=0;i<N;i++){
+    const fill = Math.max(0, Math.min(1, eqPct/STEP - i));
+    cells += fill<=0 ? '<i class="fcell"></i>'
+      : '<i class="fcell gain" style="--f:'+Math.round(fill*100)+'%"></i>';
+  }
+  return '<div class="fbar">'+cells+'</div>';
+}
+
+/* 지금 노리는 드로우 (표시 전용 — 판정·봇에는 쓰지 않는다) */
+function hudDrawLabel(){
+  const me = players[0];
+  if(me.hole.length < 2 || state.board.length < 3 || state.board.length >= 5) return null;
+  const cs = me.hole.concat(state.board);
+  const suits = {};
+  cs.forEach(c=>{ suits[c.s] = (suits[c.s]||0) + 1; });
+  for(const k in suits) if(suits[k] === 4) return '플러시 드로우';
+  const rs = {};
+  cs.forEach(c=>{ rs[c.r] = 1; if(c.r === 14) rs[1] = 1; });   // A는 위아래 양쪽에 쓴다
+  for(let lo=1; lo<=10; lo++){
+    let n = 0;
+    for(let k=0;k<5;k++) if(rs[lo+k]) n++;
+    if(n === 4) return '스트레이트 드로우';
+  }
+  return null;
+}
+
+/* ── 승률 게이지 (화면 위쪽 주인공) ── */
+function paintGauge(){
+  const me   = players[0];
+  const eq   = state.myEqPct;
+  const live = me.hole.length > 0 && !me.folded;
+  const hasEq = live && typeof eq === 'number';
+  const call = live ? hudCallInfo() : null;
+
+  if(hasEq){
+    HUD.label.textContent = '20판 중';
+    HUD.eq.textContent    = Math.floor(eq/5) + '판';
+    HUD.unit.textContent  = '승리 · ' + eq + '%';
+  } else {
+    HUD.label.textContent = '내 승률';
+    HUD.eq.textContent    = '—';
+    HUD.unit.textContent  = '';
+  }
+
+  let badge, bcls = '';
+  if(!me.hole.length)      badge = '새 판 준비 중';
+  else if(me.folded)       badge = '이번 판 폴드';
+  else if(call && hasEq)  { const ok = eq >= call.need;
+                            badge = ok ? '▲ 가격은 이득' : '▼ 가격은 손해';
+                            bcls  = ok ? ' good' : ' bad'; }
+  else if(call)            badge = '콜 ' + call.toCall.toLocaleString() + '원';
+  else if(humanTurn())     badge = '공짜로 봅니다';
+  else if(state.phase === 'done') badge = '패 공개';
+  else                     badge = '상대 차례';
+  HUD.badge.textContent = badge;
+  HUD.badge.className   = 'gbadge' + bcls;
+  HUD.gauge.classList.toggle('warn', bcls === ' bad');
+
+  // 콜 금액이 있는 내 차례면 게임이 채운 freqOdds 를 그대로 두고,
+  // 그 밖의 상황에서만 같은 모양의 배열을 대신 그린다 — 게이지가 빈 상자가 되지 않게.
+  if(hudGameOwnsOdds()) return;
+  let txt;
+  if(!me.hole.length)   txt = '새 판을 준비하는 중이에요.';
+  else if(me.folded)    txt = '이번 판은 접었습니다.';
+  else if(humanTurn())  txt = '지금은 <b>돈을 안 내고</b> 다음 카드를 볼 수 있어요.';
+  else if(state.phase === 'done') txt = '이번 판이 끝났습니다.';
+  else                  txt = '상대가 생각하는 중이에요.';
+  const head = hasEq ? '20판 하면 <b>' + Math.floor(eq/5) + '판</b> 이깁니다 · ' : '';
+  HUD.odds.innerHTML = (hasEq ? hudBar(eq) : '') + '<div class="ftext">' + head + txt + '</div>';
+}
+
+/* ── 내 패 상태 꼬리표 ── */
+function paintHand(){
+  const me = players[0];
+  if(!me.hole.length){
+    HUD.tier.textContent = ''; HUD.tier.className = 'mtag';
+    HUD.note.textContent = '';
+    return;
+  }
+  // handTierText() 는 '내 시작 핸드: Q♠ J♠ — 상급 👍' 형태를 돌려준다
+  const full = handTierText(me.hole);
+  const tier = full.split(' — ').pop();
+  const made = (state.board.length >= 3) ? myMadeHandLabel() : null;
+  const draw = hudDrawLabel();
+
+  let tag, cls = 'mtag';
+  if(made && made.indexOf('하이카드') !== 0){ tag = made; }
+  else if(draw){ tag = draw; cls = 'mtag draw'; }
+  else if(made){ tag = made; cls = 'mtag weak'; }
+  else { tag = tier; cls = 'mtag' + (/하급/.test(tier) ? ' weak' : ''); }
+  HUD.tier.textContent = tag;
+  HUD.tier.className   = cls;
+
+  const bits = [];
+  if(state.phase !== 'idle') bits.push('<b>' + posName(me.seat) + '</b> 자리');
+  if(made && draw) bits.push(draw + ' — 한 장이면 완성');
+  bits.push(full.replace('내 시작 핸드: ', '시작 패 '));
+  HUD.note.innerHTML = bits.join(' · ');
+}
+
+/* ── 코치 말풍선 (상시 노출) ──
+   코치가 실제로 말한 게 있으면 그 첫 줄, 없으면 게임이 스스로 만든 한마디. */
+let hudCoachMsg = '', hudCoachKey = '';
+function hudSituKey(){
+  return state.handNo + '|' + state.street + '|' + state.currentBet + '|' + players[0].streetBet;
+}
+function hudFirstLine(text){
+  const line = String(text||'').split('\n').map(s=>s.trim())
+    .filter(s=>s && !/^\(/.test(s) && !/^[🤔⏱↻⌛💾]/.test(s))[0] || '';
+  return line.length > 110 ? line.slice(0,108) + '…' : line;
+}
+function noteCoachLine(cls, text){
+  if(cls !== 'coach' && cls !== 'local') return;
+  const line = hudFirstLine(text);
+  if(!line) return;
+  hudCoachMsg = line;
+  hudCoachKey = hudSituKey();
+}
+function hudLocalHint(){
+  const me = players[0];
+  if(!me.hole.length) return '새 판을 준비하는 중이에요.';
+  if(state.phase === 'done') return '패를 다 열었습니다. [📋 이번 핸드 리뷰]로 되짚어 볼 수 있어요.';
+  if(me.folded)       return '이번 판은 접었어요. 다음 판을 기다립니다.';
+  if(!humanTurn()){
+    const a = players[state.toAct];
+    return (a && !a.isHuman)
+      ? a.name + '(' + a.typeLabel + ') 차례예요. 얼마를 걸고 나오는지 보고 판단하세요.'
+      : '판이 돌아가는 중이에요.';
+  }
+  const call = hudCallInfo();
+  if(state.street === 'preflop' && me.hole.length === 2){
+    const pos = posName(me.seat);
+    if(state.currentBet > BB){
+      const a = chartVsRaiseAdvice(me.hole);
+      const want = a.act === 'reraise' ? '되올리기' : a.act === 'call' ? '콜' : '폴드';
+      return '누가 이미 올렸어요. 표 기준은 <b>' + want + '</b> — ' + a.why + '.';
+    }
+    if(pos === 'BB') return '큰 블라인드 자리는 "오픈"이 없어요. 앞이 다 접으면 그냥 이긴 판 — 지킬지만 정하면 됩니다.';
+    const a = chartOpenAdvice(me.hole, pos);
+    if(a) return pos + ' 자리 ' + a.hand + ' → 표 기준은 <b>' + (a.open ? '오픈(레이즈)' : '폴드') + '</b>. ' + a.why + '.';
+    return '시작 패 기준표를 떠올려 보세요.';
+  }
+  const bits = [];
+  const made = myMadeHandLabel();
+  const draw = hudDrawLabel();
+  if(made) bits.push('지금 내 패는 <b>' + made + '</b>');
+  if(draw) bits.push(draw + '라 한 장이면 완성');
+  if(call) bits.push('콜 ' + call.toCall.toLocaleString() + '원에 필요한 승률은 ' + call.need + '%');
+  else     bits.push('돈을 안 내고 다음 카드를 볼 수 있어요');
+  return bits.join(' · ') + '.';
+}
+function paintCoach(){
+  const fresh = hudCoachMsg && hudCoachKey === hudSituKey();
+  HUD.coach.innerHTML = fresh ? escapeHtml(hudCoachMsg) : hudLocalHint();
+  HUD.cstat.innerHTML = '<i></i>' + (coachOnline ? '코치 연결됨' : '즉시 판정');
+  HUD.cstat.className = 'cstat' + (coachOnline ? ' on' : '');
+}
+
+/* ── 내 차례가 오기 전 "선택지 미리보기" 줄 ──
+   행동 버튼은 내 차례에만 나온다(게임 원래 동작). 그 사이에도 지금 각 선택이
+   얼마짜리인지는 보이는 게 공부에 낫다 — 같은 내용을 위쪽에 한 줄로 요약한다.
+   자리는 항상 잡아 두고 내 차례에는 감춘다(visibility) → 화면이 튀지 않는다. */
+function hudActLabel(head, amt){
+  return '<span class="t">' + head + '</span><span class="s2">' + amt + '</span>';
+}
+function paintActPreview(){
+  const box = HUD.preview;
+  if(!box) return;
+  const me = players[0];
+  const live = state.phase === 'betting' && me.hole.length > 0 && !me.folded && !me.allIn;
+  if(!live){
+    box.classList.add('off');
+    if(box.innerHTML) box.innerHTML = '';         // 남은 표가 진짜 버튼의 표와 겹치지 않게 비운다
+    return;
+  }
+  box.classList.remove('off');
+  if(humanTurn()){
+    // 내 차례엔 금액을 아래 진짜 버튼이 보여준다 → 이 줄은 다음 단계를 안내한다
+    box.innerHTML = '';                            // 남은 '코치 추천' 표를 먼저 치운다
+    const cm = document.getElementById('confirmMode');
+    box.innerHTML = '<div class="tip">' + ((cm && cm.checked && coachOnline)
+      ? '고른 뒤 <b>이유</b>를 적고 Enter → 코치가 평가해줍니다'
+      : '고르면 바로 실행됩니다 (코치 자동 상의 꺼짐)') + '</div>';
+    return;
+  }
+  const toCall = Math.max(0, state.currentBet - me.streetBet);
+  const canRaise = (me.streetBet + me.stack) > state.currentBet;
+  const minTo = Math.min(state.currentBet + state.minRaiseSize, me.streetBet + me.stack);
+  const rec = hudRecommend();
+  const pin = '<span class="rec-pin">코치 추천</span>';
+  let html = '<span class="apl">내 차례가 오면</span>'
+    + '<div class="act a-fold">' + (rec==='fold'?pin:'') + hudActLabel('폴드','0원') + '</div>'
+    + '<div class="act a-call">' + (rec==='call'?pin:'')
+      + hudActLabel(toCall === 0 ? '체크' : (toCall >= me.stack ? '올인 콜' : '콜'),
+                    Math.min(toCall, me.stack).toLocaleString() + '원') + '</div>';
+  if(canRaise) html += '<div class="act a-raise">' + (rec==='raise'?pin:'')
+      + hudActLabel(state.currentBet > 0 ? '레이즈' : '벳', minTo.toLocaleString() + '원부터') + '</div>';
+  box.innerHTML = html;
+  box.classList.remove('off');
+}
+
+/* ── "코치 추천" 표: 즉시 판정이 권하는 행동 버튼 위에만 붙는다 ──
+   판정 근거는 즉시 판정(localVerdict)과 똑같다 — 프리플랍은 가이드의 시작 패 기준표,
+   플랍 이후는 콜 가격(필요 승률 vs 내 승률). 코치 서버와 무관하게 항상 동작한다. */
+function hudRecommend(){
+  const me = players[0];
+  if(!me.hole.length || me.folded || me.allIn) return null;
+  if(state.phase !== 'betting') return null;
+  const toCall = state.currentBet - me.streetBet;
+  if(state.street === 'preflop' && me.hole.length === 2){
+    if(state.currentBet > BB){
+      const a = chartVsRaiseAdvice(me.hole);
+      return a.act === 'reraise' ? 'raise' : a.act === 'call' ? 'call' : 'fold';
+    }
+    const pos = posName(me.seat);
+    if(pos === 'BB') return toCall <= 0 ? 'call' : null;
+    const a = chartOpenAdvice(me.hole, pos);
+    if(!a) return null;
+    return a.open ? 'raise' : (toCall <= 0 ? 'call' : 'fold');
+  }
+  if(toCall <= 0) return 'call';                    // 공짜로 볼 수 있으면 체크
+  const eq = state.myEqPct;
+  if(typeof eq !== 'number') return null;
+  const pot = potTotal();
+  const need = Math.round(toCall/(pot+toCall)*100);
+  return eq >= need ? 'call' : 'fold';
+}
+function paintRecPin(){
+  [btnFold, btnCall, btnRaise].forEach(b=>{
+    const old = b.querySelector('.rec-pin');
+    if(old) old.remove();
+  });
+  if(getComputedStyle(ctlMain).display === 'none' || pending) return;
+  const rec = hudRecommend();
+  const btn = rec === 'call' ? btnCall : rec === 'raise' ? btnRaise : rec === 'fold' ? btnFold : null;
+  if(!btn || btn.style.display === 'none') return;
+  const pin = document.createElement('span');
+  pin.className = 'rec-pin';
+  pin.textContent = '코치 추천';
+  btn.appendChild(pin);
+}
+
+/* ── 무대 맞춤: 상대칩 + 보드 + 내 패가 테이블 칸을 넘치면 카드를 줄인다 ──
+   세로가 짧은 폰(주소창이 뜬 상태 등)에서 내 카드 아랫부분이 잘리던 것을 막는다.
+   넘칠 때만 줄이고 여유가 넉넉할 때만 되돌려서 크기가 깜빡이지 않게 한다. */
+let hudFit = 1;
+function fitStage(){
+  const t = document.getElementById('table');
+  if(!t) return;
+  // 글자 줄 높이는 배율을 따라오지 않으므로 한 번에 딱 맞지 않는다 → 최대 세 번 다시 잰다
+  for(let pass = 0; pass < 3; pass++){
+    const avail = t.clientHeight;
+    if(avail <= 40) return;
+    const kids = [...t.children];
+    if(!kids.length) return;
+    const gap = parseFloat(getComputedStyle(t).rowGap) || 0;
+    const need = kids.reduce((n,c)=>n + c.getBoundingClientRect().height, 0) + gap * (kids.length - 1);
+    if(need <= 0) return;
+    let next;
+    if(need > avail - 3)        next = hudFit * (avail - 6) / need;      // 넘친다 → 줄인다
+    else if(need < avail - 14)  next = hudFit * (avail - 8) / need;      // 많이 남는다 → 되돌린다
+    else return;
+    next = Math.max(0.5, Math.min(1, next));
+    if(Math.abs(next - hudFit) < 0.02) return;
+    hudFit = next;
+    document.documentElement.style.setProperty('--fit', hudFit.toFixed(3));
+  }
+}
+window.addEventListener('resize', ()=>{ try{ fitStage(); }catch(e){} });
+/* 무대 칸의 높이 자체가 바뀔 때도 다시 잰다 (주소창이 뜨고 사라지는 폰 등).
+   #table 은 자식이 커져도 제 크기가 안 변하므로 되먹임(무한 반복)이 생기지 않는다. */
+if(window.ResizeObserver){
+  const hudRO = new ResizeObserver(()=>{ try{ fitStage(); }catch(e){} });
+  const tableEl = document.getElementById('table');
+  if(tableEl) hudRO.observe(tableEl);
+}
+
+function paintHud(){
+  paintTypeTags();
+  paintGauge();
+  paintHand();
+  paintCoach();
+  paintActPreview();
+  paintRecPin();
+  fitStage();
+}
+function safePaint(){ try{ paintHud(); }catch(e){ console.error('HUD', e); } }
+
+/* 기존 함수를 감싼다 — 원래 동작이 먼저 끝나고, 그 결과를 위쪽에 옮겨 적는다 */
+const _hudRender = render, _hudShow = showControls, _hudHide = hideControls, _hudAddChat = addChat;
+render        = function(){ _hudRender.apply(null, arguments); safePaint(); };
+showControls  = function(){ _hudShow.apply(null, arguments);   safePaint(); };
+hideControls  = function(){ _hudHide.apply(null, arguments);   safePaint(); };
+addChat       = function(cls, text){
+  const node = _hudAddChat.apply(null, arguments);
+  try{ noteCoachLine(cls, text); safePaint(); }catch(e){}
+  return node;
+};
 
 /* ================= 시작 ================= */
 hideControls();
