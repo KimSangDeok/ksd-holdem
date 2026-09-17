@@ -202,8 +202,7 @@
     width:clamp(26px,4.6vh,40px);height:clamp(26px,4.6vh,40px);border-radius:50%;
     background:linear-gradient(160deg,#3c4a5b,#232c37);
     display:grid;place-items:center;font-weight:800;color:#e9eff6;
-    /* 테두리 2px이 안쪽 폭을 먹어서 글자 한 자가 1~2px 잘리고 있었다 */
-    font-size:clamp(12px,2vh,17px);line-height:1;
+    font-size:clamp(13px,2.2vh,19px);
     border:2px solid #4d5b6d;
     box-shadow:0 6px 16px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.16);
   }
@@ -220,7 +219,7 @@
 
   /* 딜러 버튼 */
   .dbtn{
-    /* 아바타 오른쪽으로 9px 튀어나와 옆의 스택 숫자를 덮고 있었다. 사이 여백 안으로 들인다 */
+    /* 아바타 밖으로 9px 나와서 옆 스택 숫자를 2px 덮고 있었다(실측). 사이 여백 안으로 들인다 */
     position:absolute;right:-5px;bottom:-4px;
     width:clamp(15px,2.6vh,22px);height:clamp(15px,2.6vh,22px);border-radius:50%;
     background:radial-gradient(circle at 34% 30%,#fff,#d5d5d5);color:#1b1b1b;
@@ -318,7 +317,10 @@
   #controls{
     flex:none;padding:var(--pad) clamp(10px,1.4vw,20px) clamp(9px,1.4vh,16px);
     display:flex;flex-direction:column;align-items:center;gap:clamp(5px,.9vh,9px);
-    height:clamp(142px,19.5vh,178px);justify-content:flex-start;overflow:hidden;
+    /* 터치 타깃을 44px로 키우면서 내용이 커졌다. 예전 값(19.5vh, 최대 178px)으로는
+       900×750 이하 창에서 내용이 칸을 넘어 버튼 아랫부분이 잘렸다(원본도 800×700에서
+       이미 5px 잘리고 있었다). 실측 최대 184px을 덮도록 다시 잡는다. */
+    height:clamp(186px,24vh,196px);justify-content:flex-start;overflow:hidden;
   }
   /* 줄바꿈으로 높이가 늘지 않게 — 좁으면 가로 스크롤 */
   .ctlRow{display:flex;gap:clamp(5px,.7vw,9px);align-items:center;justify-content:center;
@@ -519,8 +521,8 @@
      터치 타깃 크기 — 손가락으로 누를 수 있는 크기를 보장한다.
 
      기준: 매 판 쓰는 본화면 조작은 44×44 (애플 휴먼 인터페이스 가이드라인,
-     WCAG 2.5.5 향상 수준). 설정·패널처럼 가끔 쓰는 것은 최소 24×24에
-     24px 간격 (WCAG 2.5.2 계열 최소 수준의 간격 예외).
+     WCAG 2.5.5 향상 수준 AAA). 설정·패널처럼 가끔 쓰는 것은 최소 24×24에
+     24px 간격 (WCAG 2.2에 추가된 2.5.8 최소 수준 AA의 간격 예외).
 
      왜: 이 화면을 390×844에서 재보니 누를 수 있는 요소 48종이 전부 44px보다
      작았다. 가장 작은 건 체크박스 13×13이었다. 손가락 끝은 그보다 훨씬 굵다.
@@ -560,7 +562,7 @@
   .toolBtns button{min-height:44px}
   #logBox > summary{min-height:44px;display:flex;align-items:center;gap:6px;cursor:pointer}
   #toolsBox > summary{min-height:44px;display:flex;align-items:center;gap:6px;cursor:pointer}
-  /* 로그 높이 조절 손잡이: 보이는 선은 가늘게, 잡는 영역은 24px (간격 예외를 쓰는 최소 기준) */
+  /* 로그 높이 조절 손잡이: 보이는 선은 가늘게, 잡는 영역은 24px (WCAG 2.5.8 간격 예외) */
   #logResize{height:24px;display:flex;align-items:center;justify-content:center}
   #logResize::after{content:'';display:block;width:46px;height:4px;border-radius:2px;
     background:var(--line2);pointer-events:none}
@@ -593,8 +595,10 @@
     #raiseSlider{display:none}
     #raiseBox{width:100%;justify-content:center}
     #raiseAmt{width:96px}
-    /* 좁은 화면은 확정 바가 두 줄이 되므로 컨트롤 높이를 그만큼 더 고정 */
-    #controls{height:clamp(150px,23vh,196px)}
+    /* 좁은 화면은 확정 바가 두 줄이 되므로 컨트롤 높이를 그만큼 더 고정.
+       터치 타깃 44px 적용 후 실측 최대는 184px이다(900×750 기준). 예전 값으로는
+       750px 이하 높이에서 버튼 아랫부분이 잘렸다. */
+    #controls{height:clamp(186px,26vh,200px)}
     #pendingBox{flex-wrap:wrap;overflow:visible}
     #pendingText{flex:1 1 100%}
     #whyInput{flex:1 1 100%;min-width:0}
@@ -653,11 +657,13 @@
        이 56px 때문에 옆 승률 안내가 3~4줄로 늘어나 컨트롤 높이를 잡아먹는다 */
     #turnHint{display:none}
     #btnFold,#btnCall{padding:9px 18px}
-    /* 컨트롤 높이: 줄이 하나 늘어난 만큼 키운다. 헤드리스 크롬 실측(내 차례/확정/종료 상태 중 최대):
-       375×553 → 177px, 390×664 → 177px, 360×740 → 199px, 390×844 → 207px → 27.5vh에 3~6px 여유.
-       min-height가 모든 상태보다 크므로 평소엔 고정 높이처럼 동작해 테이블이 안 흔들리고,
-       글꼴 차이로 몇 px 넘치는 경우에만 버튼을 잘라내는 대신 살짝 늘어난다 */
-    #controls{height:auto;min-height:clamp(180px,27.5vh,210px)}
+    /* 컨트롤 높이는 상태가 바뀌어도 같아야 한다. 안 그러면 내 차례 ↔ 확정 ↔ 핸드 종료로
+       넘어갈 때마다 그 차이만큼 테이블이 위아래로 튄다(이 파일 위쪽 주석의 원래 의도).
+       터치 타깃을 44px로 키우면서 가장 높은 상태(내 차례)가 커졌으므로, 그 최대값을
+       기준으로 다시 잡는다. 헤드리스 크롬 실측 최대: 375×553 → 202px, 390×664 → 222px,
+       360×740 → 228px, 390×844 → 231px, 620×900 → 214px.
+       36.5vh는 553px 화면에서 202px이 되고, 232px 상한이 나머지를 모두 덮는다. */
+    #controls{height:auto;min-height:clamp(202px,36.5vh,232px)}
     /* 테이블: 컨트롤이 커진 만큼 카드·간격을 줄여 보드(공개 카드+팟)가 위·아래 카드와 겹치지 않게 */
     #table{gap:6px 2px}
     #potLine{margin-top:4px;padding:3px 10px;font-size:13px}
@@ -1569,7 +1575,7 @@ function updateEquity(){
   const key = state.handNo + '/' + state.board.length + '/' + nOpp;
   if(key === eqKey) return;
   eqKey = key;
-  // 220회는 표준편차가 ±3.5%p나 돼서 같은 패인데도 44%와 51%를 오갔다.
+  // 220회는 표준편차가 ±3.5%p다. 같은 패(A·K 대 2명)를 40번 돌리니 40%~57%로 흩어졌다.
   // 1200회로 올리면 ±1.6%p로 줄고, 가장 무거운 프리플랍 3인 기준 57ms다.
   // 보드나 남은 인원이 바뀔 때만 다시 계산하므로(아래 eqKey 캐시) 핸드당 몇 번뿐이다.
   const eq = estimateEquity(me.hole, state.board, nOpp, 1200);
