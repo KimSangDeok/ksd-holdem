@@ -71,11 +71,16 @@
   /* ───────── 게임 영역 ───────── */
   #main{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden}
 
+  /* 고정 높이 + 줄바꿈 조합이라 내용이 넘치면 둘째 줄이 통째로 잘렸다.
+     실제로 [📚 가이드] 버튼이 잘린 줄로 밀려 아래 메시지 영역을 덮고 있었다.
+     높이를 내용에 맡기고, 폰에서는 아예 한 줄에 들어가게 내용을 줄인다. */
   #topbar{
-    flex:none;height:clamp(44px,6.4vh,54px);display:flex;align-items:center;
+    flex:none;min-height:clamp(44px,6.4vh,54px);display:flex;align-items:center;
     gap:clamp(8px,1vw,14px);padding:0 clamp(10px,1.4vw,20px);
     font-size:clamp(12px,1.7vh,13.5px);color:var(--ink2);flex-wrap:wrap;
   }
+  /* 데스크톱에서는 음량·효과음 묶음이 그대로 보이므로 🔊 버튼은 중복이다 */
+  #sndToggle{display:none}
   #topbar b{color:var(--ink)}
   #topbar .tag{color:var(--ink2)}
   #refToggle,#sndToggle{padding:7px 12px;font-size:12.5px}
@@ -197,7 +202,8 @@
     width:clamp(26px,4.6vh,40px);height:clamp(26px,4.6vh,40px);border-radius:50%;
     background:linear-gradient(160deg,#3c4a5b,#232c37);
     display:grid;place-items:center;font-weight:800;color:#e9eff6;
-    font-size:clamp(13px,2.2vh,19px);
+    /* 테두리 2px이 안쪽 폭을 먹어서 글자 한 자가 1~2px 잘리고 있었다 */
+    font-size:clamp(12px,2vh,17px);line-height:1;
     border:2px solid #4d5b6d;
     box-shadow:0 6px 16px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.16);
   }
@@ -214,7 +220,8 @@
 
   /* 딜러 버튼 */
   .dbtn{
-    position:absolute;right:-9px;bottom:-4px;
+    /* 아바타 오른쪽으로 9px 튀어나와 옆의 스택 숫자를 덮고 있었다. 사이 여백 안으로 들인다 */
+    position:absolute;right:-5px;bottom:-4px;
     width:clamp(15px,2.6vh,22px);height:clamp(15px,2.6vh,22px);border-radius:50%;
     background:radial-gradient(circle at 34% 30%,#fff,#d5d5d5);color:#1b1b1b;
     font-size:clamp(9px,1.5vh,12px);font-weight:900;display:grid;place-items:center;
@@ -483,7 +490,21 @@
   #copyToast{font-size:12px;color:#7ee2a8;margin-top:5px}
 
   /* ───────── 오버레이 ───────── */
-  #dim{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:55}
+  /* 가이드 패널은 폰에서 화면의 94%를 덮어 상단바의 [가이드 닫기] 버튼까지 가린다.
+     어두운 배경에도 닫기 동작이 없어서, 한 번 열면 빠져나올 길이 없었다.
+     패널 안에 닫기 버튼을 두고, 배경 탭과 Esc 키로도 닫히게 한다. */
+  /* #ref에 transform이 걸려 있어 이 fixed 버튼은 패널을 기준으로 자리를 잡는다.
+     패널 내용이 길게 스크롤돼도 닫기 버튼은 늘 오른쪽 위에 그대로 있다. */
+  #refClose{
+    position:fixed;top:10px;right:10px;z-index:3;
+    width:44px;height:44px;min-width:44px;min-height:44px;
+    display:flex;align-items:center;justify-content:center;
+    font-size:17px;line-height:1;border-radius:10px;
+    background:var(--panel2);border:1px solid var(--line2);color:var(--ink2);
+    box-shadow:0 2px 10px rgba(0,0,0,.5);
+  }
+  #refClose:hover{background:#2b3542;color:var(--ink)}
+  #dim{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:55;cursor:pointer}
   #dim.show{display:block}
   #termPop{
     display:none;position:fixed;z-index:90;max-width:min(420px,92vw);
@@ -493,6 +514,56 @@
   #termPop.show{display:block}
   #termPop b{color:var(--gold)}
   #termPop .closeHint{display:block;margin-top:9px;font-size:11.5px;color:var(--ink3)}
+
+  /* ═════════════════════════════════════════════════════════════════
+     터치 타깃 크기 — 손가락으로 누를 수 있는 크기를 보장한다.
+
+     기준: 매 판 쓰는 본화면 조작은 44×44 (애플 휴먼 인터페이스 가이드라인,
+     WCAG 2.5.5 향상 수준). 설정·패널처럼 가끔 쓰는 것은 최소 24×24에
+     24px 간격 (WCAG 2.5.2 계열 최소 수준의 간격 예외).
+
+     왜: 이 화면을 390×844에서 재보니 누를 수 있는 요소 48종이 전부 44px보다
+     작았다. 가장 작은 건 체크박스 13×13이었다. 손가락 끝은 그보다 훨씬 굵다.
+     체크박스는 상자를 키우는 대신 라벨 전체를 타깃으로 만든다 — 글자까지
+     눌리는 게 더 정확하고 자리도 덜 쓴다.
+     ═════════════════════════════════════════════════════════════════ */
+  #controls button,#topbar button,#side button{min-height:44px}
+  #refToggle,#sndToggle{min-width:44px;min-height:44px;padding:7px 12px;font-size:12.5px;
+    align-items:center;justify-content:center;gap:5px}
+  #refToggle{display:inline-flex}
+
+  /* 체크박스·라디오: 라벨 전체가 타깃, 상자는 그 안의 표시 */
+  label.tag,#chatOpts label{
+    display:inline-flex;align-items:center;gap:7px;min-height:44px;
+    padding:0 8px;border-radius:9px;cursor:pointer;
+  }
+  label.tag:hover,#chatOpts label:hover{background:rgba(255,255,255,.05)}
+  label.tag input[type=checkbox],#chatOpts input[type=checkbox]{
+    width:20px;height:20px;flex:none;accent-color:var(--gold2);cursor:pointer;margin:0;
+  }
+  #sndVol{width:110px;height:44px;flex:none;accent-color:var(--gold2);cursor:pointer;margin:0}
+  #coachModelSel{min-height:44px;font-size:16px;padding:0 8px;border-radius:9px;
+    background:var(--sunken);color:var(--ink);border:1px solid var(--line2);cursor:pointer}
+
+  /* 행동·베팅 조작 */
+  #btnFold,#btnCall,#btnRaise,#btnReserveFold{min-height:44px}
+  .preset,.nudge{min-height:44px;min-width:44px}
+  #raiseAmt,#whyInput{min-height:44px}
+  #btnWhySend,#btnConfirm,#btnRethink{min-height:44px}
+  .ctlEnd > button{min-height:44px}
+  /* 슬라이더: 보이는 선은 얇게 두고 누르는 영역만 44px로 (데스크톱 전용) */
+  #raiseSlider{height:44px;accent-color:var(--gold2);cursor:pointer}
+
+  /* 코치 패널 */
+  #btnChatSend{min-height:44px;min-width:44px}
+  #chatInput{min-height:44px}
+  .toolBtns button{min-height:44px}
+  #logBox > summary{min-height:44px;display:flex;align-items:center;gap:6px;cursor:pointer}
+  #toolsBox > summary{min-height:44px;display:flex;align-items:center;gap:6px;cursor:pointer}
+  /* 로그 높이 조절 손잡이: 보이는 선은 가늘게, 잡는 영역은 24px (간격 예외를 쓰는 최소 기준) */
+  #logResize{height:24px;display:flex;align-items:center;justify-content:center}
+  #logResize::after{content:'';display:block;width:46px;height:4px;border-radius:2px;
+    background:var(--line2);pointer-events:none}
 
   /* ───────── 반응형 (배치가 달라지는 것만) ───────── */
   @media (max-width:1200px){ #side{width:clamp(290px,30vw,350px)} }
@@ -531,8 +602,12 @@
   }
 
   @media (max-width:620px){
-    #topbar{font-size:11.5px;gap:7px}
+    /* 폰에서는 상단바를 한 줄로 고정하고, 없어도 되는 글자를 접어 전부 들어가게 한다 */
+    #topbar{font-size:11.5px;gap:7px;flex-wrap:nowrap;min-height:48px}
     #topbar span.tag:nth-of-type(3),#topbar span.tag:nth-of-type(4){display:none}
+    #topbar .wLong{display:none}
+    #sndToggle{display:inline-flex}
+    #refToggle{flex:none}
     #sndToggle{display:inline-block}
     #sndGroup{
       display:none;position:fixed;top:46px;left:8px;z-index:80;
@@ -542,7 +617,20 @@
     }
     #sndGroup.open{display:flex}
     #sndVol{width:70px !important}
-    #table{padding:5px 7px;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr) minmax(0,1fr)}
+    /* 폰에서 보드가 가운데 칸(121px)을 넘어 242px로 퍼지면서 좌우 자리 이름표를
+       덮고 카드를 가렸다. 가운데 칸을 넓히고 보드·상대 카드를 그 칸에 맞게 줄인다.
+       대신 내 카드는 키워서, 화면에서 내 패가 가장 큰 카드가 되게 한다. */
+    #table{padding:5px 7px;
+      grid-template-columns:minmax(0,1fr) minmax(0,2fr) minmax(0,1fr)}
+    .card{width:clamp(23px,4vh,30px);height:clamp(32px,5.6vh,42px)}
+    #seat0 .cards .card{width:clamp(34px,6.4vh,48px);height:clamp(47px,8.9vh,66px)}
+    /* 좌우 자리는 칸이 좁아 아바타와 글자를 나란히 두면 이름·스택이 심하게 잘린다.
+       아바타를 위로 올려 쌓으면 글자가 칸 너비를 통째로 쓴다. 내 자리는 가운데 넓은
+       칸이라 가로 배치를 유지한다. */
+    #seat1 .box,#seat3 .box{flex-direction:column;align-items:center;gap:1px;text-align:center}
+    #seat1 .binfo,#seat3 .binfo{text-align:center;width:100%}
+    #seat1 .pod,#seat3 .pod{width:clamp(20px,3.4vh,26px);height:clamp(20px,3.4vh,26px);
+                            font-size:clamp(10px,1.7vh,13px)}
     .seat .ptype{display:none}
     .seat .betchip{display:none}
     .seat .contribLine .nowBet{display:inline}
@@ -571,17 +659,34 @@
        글꼴 차이로 몇 px 넘치는 경우에만 버튼을 잘라내는 대신 살짝 늘어난다 */
     #controls{height:auto;min-height:clamp(180px,27.5vh,210px)}
     /* 테이블: 컨트롤이 커진 만큼 카드·간격을 줄여 보드(공개 카드+팟)가 위·아래 카드와 겹치지 않게 */
-    #table{gap:6px 2px;padding:5px 8px}
-    .card{width:clamp(32px,6.2vh,46px);height:clamp(44px,8.6vh,64px)}
+    #table{gap:6px 2px}
     #potLine{margin-top:4px;padding:3px 10px;font-size:13px}
+    /* 자리 카드 줄 간격 정리 — 글자 크기는 그대로라 읽기에 영향이 없고,
+       스택 자릿수나 이름 길이에 따라 높이가 1px씩 흔들리던 여유를 만든다 */
+    .seat{gap:0}
+    .binfo{line-height:1.2}
+    .seat .pname,.seat .pstack,.seat .contribLine{line-height:1.22}
   }
 
-  /* 세로가 짧은 폰(주소창까지 뜬 아이폰 등)에서는 검산줄을 접는다.
-     판수 문장과 판정은 결정에 쓰이지만 퍼센트 줄은 확인용이라, 자리가 없으면 이게 먼저 빠진다. */
-  @media (max-height:680px){
+  /* 세로가 짧은 폰(주소창까지 뜬 아이폰 등). 터치 타깃 44px은 건드리지 않고,
+     대신 검산줄을 접고 테이블이 미리 잡아둔 예약 높이를 줄여 자리를 만든다.
+     누르는 크기를 줄여 공간을 버는 것은 이 작업의 목적과 정반대다. */
+  @media (max-height:700px){
     .fsub{display:none}
     #oddsHint{gap:3px;padding:4px 9px}
     .fbar{height:10px}
+    #table{grid-template-rows:minmax(clamp(52px,9.4vh,84px),auto) minmax(0,1fr) minmax(clamp(72px,13vh,120px),auto);
+           gap:5px 2px;padding:4px 7px}
+    .card{width:clamp(22px,3.7vh,28px);height:clamp(30px,5.2vh,39px)}
+    #seat0 .cards .card{width:clamp(30px,5.6vh,42px);height:clamp(42px,7.8vh,58px)}
+    .pod{width:clamp(23px,4.1vh,34px);height:clamp(23px,4.1vh,34px);font-size:clamp(11px,2vh,16px)}
+    /* 보드가 자기 줄을 갖게 되면서 팟 표시가 내 카드와 닿았다. 여백만 조인다. */
+    #potLine{margin-top:2px;padding:2px 8px;font-size:12px}
+    #boardArea{gap:0}
+    /* 자리 카드의 줄 간격을 조인다 — 글자 크기는 그대로라 읽기에는 영향이 없다 */
+    .seat{gap:0}
+    .binfo{line-height:1.18}
+    .seat .pname,.seat .pstack,.seat .contribLine{line-height:1.2}
   }
   /* 아주 짧은 화면(구형 아이폰 + 주소창·툴바 둘 다 뜬 상태, 약 553px)에서는
      승률 블록을 더 조이고 테이블 카드·아바타도 함께 줄인다.
@@ -590,13 +695,34 @@
     #oddsHint{gap:2px;padding:3px 8px}
     .fbar{height:8px}
     .ftext{line-height:1.25}
-    #controls{gap:3px}
-    #table{gap:4px 2px;padding:4px 6px}
-    .card{width:clamp(26px,5.2vh,40px);height:clamp(36px,7.3vh,56px)}
-    .pod{width:clamp(22px,3.9vh,32px);height:clamp(22px,3.9vh,32px);font-size:clamp(11px,1.9vh,15px)}
+    #controls{gap:3px;padding:5px 8px}
     /* 위·아래 줄에 미리 잡아둔 최소 높이가 이 화면에선 테이블의 65%를 먹는다. 그 예약분을 줄인다. */
-    #table{grid-template-rows:minmax(clamp(50px,9.6vh,80px),auto) minmax(0,1fr) minmax(clamp(68px,12.6vh,110px),auto)}
-    #potLine{margin-top:2px;padding:2px 8px;font-size:12px}
+    #table{gap:2px 2px;padding:3px 6px;
+           grid-template-rows:minmax(clamp(42px,8vh,70px),auto) minmax(0,1fr) minmax(clamp(58px,10.8vh,98px),auto)}
+    .card{width:clamp(20px,3.4vh,26px);height:clamp(28px,4.8vh,36px)}
+    #seat0 .cards .card{width:clamp(27px,5.1vh,38px);height:clamp(37px,7.1vh,53px)}
+    .pod{width:clamp(20px,3.6vh,30px);height:clamp(20px,3.6vh,30px);font-size:clamp(10px,1.8vh,14px)}
+    #potLine{margin-top:2px;padding:2px 8px;font-size:11.5px}
+    /* 자리 카드를 압축한다. 이 화면에서 위쪽 자리가 93px이라 보드를 덮고 있었다.
+       베팅 금액(지금 N)은 판단에 필요하므로 남기고, 줄 간격·글자만 조인다. */
+    .seat{gap:0}
+    .seat .pname{font-size:11px;line-height:1.15}
+    .seat .pstack{font-size:13px;line-height:1.15}
+    .seat .contribLine{font-size:9.5px;line-height:1.15}
+    .binfo{line-height:1.15}
+    .box{padding:3px 5px}
+    /* 코치 분석 상태는 이 화면에서만 접는다. 같은 내용이 코치 패널 제목 옆에도 뜨고,
+       이 알약이 124px을 먹는 바람에 승률 문장이 두 줄로 늘어나 있었다. */
+    #preState{display:none}
+    #potLine{margin-top:1px}
+    #boardArea{gap:0}
+    /* 상단 고정 영역은 순수 여백이라 가장 먼저 줄인다 (누르는 크기는 그대로 둔다) */
+    /* 상단바는 44px 버튼이 들어가야 하므로 더 줄이지 않는다. 대신 배너 줄에서 벌어온다. */
+    #topbar{gap:5px;padding:0 8px}
+    #msgRow{min-height:26px;padding:0 8px}
+    #msg{font-size:12px;padding:2px 11px}
+    /* 판정 문구의 괄호 설명을 접어 한 줄로 만든다 (결론 자체는 그대로 보인다) */
+    .ftext .note{display:none}
   }
 
 </style>
@@ -607,6 +733,7 @@
 <div id="termPop"></div>
 
 <div id="ref">
+<button id="refClose" type="button" aria-label="가이드 닫기" title="가이드 닫기">✕</button>
 <div class="refCol">
   <div class="rTitle">📈 내 승률 (추정)</div>
   <div id="equityVal">—</div>
@@ -763,7 +890,7 @@
 
 <div id="main">
   <div id="topbar">
-    <span>🃏 <b>홀덤 연습장1</b></span>
+    <span>🃏 <b class="wLong">홀덤 연습장1</b></span>
     <span class="tag" id="handInfo">핸드 #1</span>
     <span class="tag">블라인드 100 / 200</span>
     <span class="tag">시작 스택 10,000원 (파산 시 자동 리바이)</span>
@@ -773,7 +900,7 @@
       <label class="tag" style="cursor:pointer;">음량 <input type="range" id="sndVol" min="0" max="4" step="0.1" value="2.2" style="width:110px; vertical-align:middle; accent-color:#c9a13b;" title="효과음·음성 음량"></label>
       <label class="tag" style="cursor:pointer;"><input type="checkbox" id="voiceOn" checked> 🗣 음성(콜·폴드 읽기)</label>
     </span>
-    <label class="tag" style="cursor:pointer;"><input type="checkbox" id="profileOn"> 📝 데이터 기록</label>
+    <label class="tag" style="cursor:pointer;"><input type="checkbox" id="profileOn"> 📝 <span class="wLong">데이터 </span>기록</label>
     <button id="refToggle">📚 가이드</button>
   </div>
 
@@ -2096,7 +2223,7 @@ function freqOdds(toCall, pot, needPct, eqPct){
     const winN = Math.round(eqPct / STEP);
     text = '<b>20판 중 ' + winN + '판</b> 이깁니다 · ' + breakEven + ' ' +
       (eqPct >= needPct
-        ? '<span class="good">✅ 가격은 유리 (패 질은 별도!)</span>'
+        ? '<span class="good">✅ 가격은 유리 <small class="note">(패 질은 별도!)</small></span>'
         : '<span class="bad">❌ 가격부터 손해</span>');
   } else {
     text = '20판 중 ' + breakEven;
@@ -3258,8 +3385,14 @@ function setRef(open){
 document.getElementById('refToggle').onclick = ()=>{
   setRef(!document.getElementById('ref').classList.contains('open'));
 };
-// 패널 밖(테이블 등)을 클릭하면 닫기
+// 닫는 길을 셋으로: 패널 안 ✕ 버튼 / 어두운 배경 탭 / Esc 키.
+// (기존엔 상단바 버튼 하나뿐이었는데 그 버튼을 패널이 덮어서 닫을 수가 없었다)
+document.getElementById('refClose').onclick = ()=> setRef(false);
+document.getElementById('dim').addEventListener('click', ()=> setRef(false));
 document.getElementById('tableWrap').addEventListener('click', ()=> setRef(false));
+document.addEventListener('keydown', e => {
+  if(e.key === 'Escape' && document.getElementById('ref').classList.contains('open')) setRef(false);
+});
 
 /* ================= 시작 ================= */
 hideControls();
