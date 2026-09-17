@@ -319,11 +319,32 @@
   .ctlRow::-webkit-scrollbar{display:none}
   .ctlInfo{justify-content:flex-start;min-height:20px}
   #turnHint{color:var(--gold);font-weight:800;font-size:clamp(11.5px,1.7vh,13.5px);flex-shrink:0}
+  /* 팟 오즈를 퍼센트가 아니라 '판수'로 보여준다.
+     근거: 자연빈도(20판 중 8판)가 확률(42%)보다 이해도가 높고, 아이콘 배열은
+     수리력이 낮은 사람에게 특히 효과가 크다. 코치 지시문 1번 규칙도 이미
+     비율 표기를 금지하고 횟수로 말하게 되어 있어, 화면과 코치의 언어가 같아진다. */
   #oddsHint{
+    flex:1;min-width:0;
     font-size:clamp(11px,1.6vh,12.5px);color:var(--ink2);
     background:rgba(255,255,255,.05);border:1px solid var(--line);
-    border-radius:999px;padding:5px 12px;font-variant-numeric:tabular-nums;
+    border-radius:10px;padding:5px 10px;font-variant-numeric:tabular-nums;
+    display:flex;flex-direction:column;gap:4px;
   }
+  /* 한 칸 = 5% = 20판 중 1판 */
+  .fbar{position:relative;display:flex;gap:2px;height:11px;flex:none}
+  .fcell{flex:1;min-width:0;border-radius:2px;background:rgba(255,255,255,.07)}
+  .fcell.even{background:linear-gradient(90deg,var(--green2) var(--f,100%),rgba(255,255,255,.07) 0)}
+  .fcell.gain{background:linear-gradient(90deg,var(--green) var(--f,100%),rgba(255,255,255,.07) 0)}
+  .fneed{position:absolute;top:-3px;bottom:-3px;width:2px;margin-left:-1px;
+         background:#fff;border-radius:1px;box-shadow:0 0 0 1px rgba(0,0,0,.55)}
+  /* 판정 문구까지 다 보여야 하므로 줄바꿈 허용 — 잘리면 초보가 결론을 못 읽는다 */
+  .ftext{font-size:clamp(11.5px,1.7vh,13px);color:var(--ink2);line-height:1.35;
+         word-break:keep-all;overflow-wrap:break-word}
+  .ftext .good,.ftext .bad{white-space:nowrap}
+  .ftext b{color:var(--ink);font-weight:800}
+  /* 코치 상태 알약이 같은 줄을 쓸 때는 폭이 좁아지므로 줄바꿈을 허용한다 (잘리면 검산이 안 된다) */
+  .fsub{font-size:clamp(9.5px,1.35vh,11px);color:var(--ink3);line-height:1.3;
+        word-break:keep-all;overflow-wrap:break-word}
   #oddsHint:empty{display:none}
   /* 선행 분석 진행 표시 — 도는 중인지 준비됐는지 한눈에 */
   #preState{font-size:clamp(11px,1.6vh,12.5px);font-weight:800;border-radius:999px;
@@ -553,6 +574,29 @@
     #table{gap:6px 2px;padding:5px 8px}
     .card{width:clamp(32px,6.2vh,46px);height:clamp(44px,8.6vh,64px)}
     #potLine{margin-top:4px;padding:3px 10px;font-size:13px}
+  }
+
+  /* 세로가 짧은 폰(주소창까지 뜬 아이폰 등)에서는 검산줄을 접는다.
+     판수 문장과 판정은 결정에 쓰이지만 퍼센트 줄은 확인용이라, 자리가 없으면 이게 먼저 빠진다. */
+  @media (max-height:680px){
+    .fsub{display:none}
+    #oddsHint{gap:3px;padding:4px 9px}
+    .fbar{height:10px}
+  }
+  /* 아주 짧은 화면(구형 아이폰 + 주소창·툴바 둘 다 뜬 상태, 약 553px)에서는
+     승률 블록을 더 조이고 테이블 카드·아바타도 함께 줄인다.
+     이 크기에서는 원래도 위쪽 자리가 보드를 24px 덮고 있었다. */
+  @media (max-height:580px){
+    #oddsHint{gap:2px;padding:3px 8px}
+    .fbar{height:8px}
+    .ftext{line-height:1.25}
+    #controls{gap:3px}
+    #table{gap:4px 2px;padding:4px 6px}
+    .card{width:clamp(26px,5.2vh,40px);height:clamp(36px,7.3vh,56px)}
+    .pod{width:clamp(22px,3.9vh,32px);height:clamp(22px,3.9vh,32px);font-size:clamp(11px,1.9vh,15px)}
+    /* 위·아래 줄에 미리 잡아둔 최소 높이가 이 화면에선 테이블의 65%를 먹는다. 그 예약분을 줄인다. */
+    #table{grid-template-rows:minmax(clamp(50px,9.6vh,80px),auto) minmax(0,1fr) minmax(clamp(68px,12.6vh,110px),auto)}
+    #potLine{margin-top:2px;padding:2px 8px;font-size:12px}
   }
 
 </style>
@@ -2024,6 +2068,47 @@ function hideControls(){
   const oh = document.getElementById('oddsHint');
   if(oh) oh.innerHTML='';
 }
+/* 팟 오즈를 '20판 중 몇 판'으로 그린다 (한 칸 = 5%).
+   퍼센트는 아래 보조줄에 검산용으로 남긴다 — 숫자를 없애는 게 아니라 순서를 바꾸는 것. */
+function freqOdds(toCall, pot, needPct, eqPct){
+  const N = 20, STEP = 100 / N;                 // 칸 하나가 5%
+  const needN = Math.round(needPct / STEP);
+  const hasEq = typeof eqPct === 'number';
+  const eqCells = hasEq ? eqPct / STEP : 0;
+
+  let cells = '';
+  for(let i = 0; i < N; i++){
+    const fill = Math.max(0, Math.min(1, eqCells - i));   // 마지막 칸은 일부만 채움
+    cells += fill <= 0
+      ? '<i class="fcell"></i>'
+      : '<i class="fcell ' + (i < needPct / STEP ? 'even' : 'gain') +
+        '" style="--f:' + Math.round(fill * 100) + '%"></i>';
+  }
+  const bar = '<div class="fbar">' + cells +
+    '<i class="fneed" style="left:' + Math.max(0, Math.min(100, needPct)) + '%"></i></div>';
+
+  const breakEven = needN <= 0
+    ? '<b>거의 공짜</b>라 안 이겨도 손해가 적어요'
+    : '<b>' + needN + '판</b>만 이겨도 본전';
+
+  let text;
+  if(hasEq){
+    const winN = Math.round(eqPct / STEP);
+    text = '<b>20판 중 ' + winN + '판</b> 이깁니다 · ' + breakEven + ' ' +
+      (eqPct >= needPct
+        ? '<span class="good">✅ 가격은 유리 (패 질은 별도!)</span>'
+        : '<span class="bad">❌ 가격부터 손해</span>');
+  } else {
+    text = '20판 중 ' + breakEven;
+  }
+
+  // 라벨을 줄인 짧은 검산줄 — 윗줄이 이미 말로 설명하므로 여기선 숫자만 (폰 폭에서 잘리지 않게)
+  const sub = '콜 ' + toCall.toLocaleString() + ' → 이기면 ' + (pot + toCall).toLocaleString() +
+    ' · 필요 ' + needPct + '%' + (hasEq ? ' / 내 ' + eqPct + '%' : '');
+
+  return bar + '<div class="ftext">' + text + '</div><div class="fsub">' + sub + '</div>';
+}
+
 function showControls(){
   pending = null;
   pendingBox.style.display='none';
@@ -2035,15 +2120,7 @@ function showControls(){
   if(toCall > 0){
     const pot = potTotal();
     const needPct = Math.round(toCall / (pot + toCall) * 100);
-    let cmp = '';
-    if(typeof state.myEqPct === 'number'){
-      cmp = ' · 내 승률 ' + state.myEqPct + '% ' +
-        (state.myEqPct >= needPct
-          ? '<span class="good">✅ 가격은 유리 (패 질은 별도!)</span>'
-          : '<span class="bad">❌ 가격부터 손해</span>');
-    }
-    oh.innerHTML = '📐 콜 ' + toCall.toLocaleString() + ' → 이기면 ' + (pot + toCall).toLocaleString() +
-      ' → 필요 승률 ' + needPct + '%' + cmp;
+    oh.innerHTML = freqOdds(toCall, pot, needPct, state.myEqPct);
   } else {
     oh.innerHTML = '';
   }
