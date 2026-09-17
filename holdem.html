@@ -1569,7 +1569,10 @@ function updateEquity(){
   const key = state.handNo + '/' + state.board.length + '/' + nOpp;
   if(key === eqKey) return;
   eqKey = key;
-  const eq = estimateEquity(me.hole, state.board, nOpp, 220);
+  // 220회는 표준편차가 ±3.5%p나 돼서 같은 패인데도 44%와 51%를 오갔다.
+  // 1200회로 올리면 ±1.6%p로 줄고, 가장 무거운 프리플랍 3인 기준 57ms다.
+  // 보드나 남은 인원이 바뀔 때만 다시 계산하므로(아래 eqKey 캐시) 핸드당 몇 번뿐이다.
+  const eq = estimateEquity(me.hole, state.board, nOpp, 1200);
   state.myEqPct = Math.round(eq*100);
   el.textContent = Math.round(eq*100) + '%';
   document.getElementById('equityNote').textContent =
@@ -2199,7 +2202,10 @@ function hideControls(){
    퍼센트는 아래 보조줄에 검산용으로 남긴다 — 숫자를 없애는 게 아니라 순서를 바꾸는 것. */
 function freqOdds(toCall, pot, needPct, eqPct){
   const N = 20, STEP = 100 / N;                 // 칸 하나가 5%
-  const needN = Math.round(needPct / STEP);
+  // 반올림하면 거짓말이 된다. 필요 16.7%를 "3판"으로 내리면 3/20=15%라 실제로는 손해다.
+  // 본전에 필요한 판수는 올리고(모자라면 손해), 이기는 판수는 내린다(부풀리지 않는다).
+  // 이렇게 하면 그림과도 정확히 맞는다 — 어두운 칸 수 = 필요 판수, 꽉 찬 칸 수 = 이기는 판수.
+  const needN = Math.ceil(needPct / STEP);
   const hasEq = typeof eqPct === 'number';
   const eqCells = hasEq ? eqPct / STEP : 0;
 
@@ -2220,8 +2226,11 @@ function freqOdds(toCall, pot, needPct, eqPct){
 
   let text;
   if(hasEq){
-    const winN = Math.round(eqPct / STEP);
-    text = '<b>20판 중 ' + winN + '판</b> 이깁니다 · ' + breakEven + ' ' +
+    const winN = Math.floor(eqCells);          // 꽉 찬 칸 수와 같다
+    const winTxt = winN <= 0
+      ? '<b>20판 중 1판</b>도 이기기 어렵습니다'
+      : '<b>20판 중 ' + winN + '판</b> 이깁니다';
+    text = winTxt + ' · ' + breakEven + ' ' +
       (eqPct >= needPct
         ? '<span class="good">✅ 가격은 유리 <small class="note">(패 질은 별도!)</small></span>'
         : '<span class="bad">❌ 가격부터 손해</span>');
