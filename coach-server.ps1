@@ -1,6 +1,6 @@
 ﻿# 홀덤 코치 중계 서버
 # holdem.html 의 채팅을 받아 Claude Code CLI(claude -p)로 전달하고 답변을 돌려준다.
-# 실행: 코치서버시작.bat 더블클릭 (또는 powershell -ExecutionPolicy Bypass -File coach-server.ps1)
+# 실행: 배포 서버(리눅스)에서 서비스로 상시 구동한다. 집 PC에서 .bat으로 실행하던 방식은 더 이상 쓰지 않는다.
 
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -59,7 +59,7 @@ if ($lanMode) {
 } else {
     Write-Host "  (모바일 접속 비활성 — localhost 전용 모드)" -ForegroundColor Yellow
 }
-Write-Host "  이 창을 닫으면 코치 채팅이 중단됩니다. (게임 자체는 계속 가능)"
+Write-Host "  이 서버 프로세스가 멈추면 코치 채팅이 중단됩니다. (게임 자체는 계속 가능)"
 Write-Host ""
 
 $script:sessionId = $null
@@ -338,7 +338,7 @@ while ($listener.IsListening) {
         continue
     }
 
-    # 게임 페이지 서빙 (http://localhost:8765/ 로 접속하면 게임이 열림)
+    # 게임 페이지 서빙 (서버주소:8765/ 로 접속하면 게임이 열림. 폰도 같은 주소를 쓴다)
     # /old = 예전 UI 백업본 (문제 생기면 여기로 대피)
     if ($req.HttpMethod -eq 'GET' -and ($req.Url.AbsolutePath -eq '/old' -or $req.Url.AbsolutePath -eq '/holdem-old.html')) {
         try {
