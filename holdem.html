@@ -1070,7 +1070,7 @@ function speak(text){
   if(!v || !v.checked) return;
   const isLocalPC = (location.hostname === 'localhost' || location.hostname === '127.0.0.1' || !location.hostname);
   if(isLocalPC){
-    // PC에서 플레이: 서버의 Windows 음성(확실함) 우선, 서버 꺼지면 브라우저 TTS
+    // localhost로 연 경우(서버와 같은 기기): 서버의 Windows 음성 우선, 서버가 꺼지면 브라우저 TTS
     if(typeof coachOnline !== 'undefined' && coachOnline){
       fetch(COACH_URL + '/say', {
         method:'POST',
@@ -2869,10 +2869,10 @@ function copyText(t){
 document.getElementById('btnCopyNow').onclick =()=>copyText(situationText(true));
 
 /* ================= 로컬 DB (핸드 기록) ================= */
-// 모바일에서 접속해도 서버(PC)를 바라보도록 현재 접속 호스트 기준으로 주소 계산
+// 폰에서 접속해도 같은 서버를 바라보도록 현재 접속 호스트 기준으로 주소 계산
 const HOST = (location.protocol.indexOf('http') === 0 && location.hostname) ? location.hostname : 'localhost';
 // 기록 서버(8770)는 인증이 없어서 인터넷에 직접 열지 않는다.
-// 원격 접속일 때는 코치 서버(8765)의 /db 중계를 통해서만 접근 (집 localhost에서는 기존처럼 직접)
+// 원격 접속일 때는 코치 서버(8765)의 /db 중계를 통해서만 접근 (localhost로 열었을 때만 기존처럼 직접)
 const DB_URL = (HOST === 'localhost' || HOST === '127.0.0.1')
   ? 'http://' + HOST + ':8770'
   : 'http://' + HOST + ':8765/db';
@@ -3203,7 +3203,7 @@ async function pingCoach(){
     }
   }catch(e){}
   coachOnline = false;
-  coachState.textContent = '(서버 꺼짐 — 홀덤시작.bat 실행)';
+  coachState.textContent = '(서버 꺼짐)';
   coachState.style.color = '#d0908f';
   return false;
 }
@@ -3234,7 +3234,7 @@ async function sendToCoach(fullMsg, silent, quiet, fast){
   const tick = setInterval(()=>{
     const s = Math.floor((Date.now() - t0) / 1000);
     if(s >= 90){
-      wait.textContent = '⚠️ 평소(10~60초)보다 오래 걸리고 있어요 ('+s+'초) — 코치 서버 창에 오류가 없는지 확인해보세요. 3분이 되면 자동 취소됩니다.';
+      wait.textContent = '⚠️ 평소(10~60초)보다 오래 걸리고 있어요 ('+s+'초) — 코치 서버가 바쁘거나 사용량 한도일 수 있어요. 3분이 되면 자동 취소됩니다.';
     } else if(s >= 30){
       wait.textContent = '🤔 코치가 생각 중... ('+s+'초) — 보통 1분 안에 답해요';
     } else {
@@ -3275,9 +3275,9 @@ async function sendToCoach(fullMsg, silent, quiet, fast){
     glog('  ❌ 코치 연결 오류: ' + (e && e.name === 'AbortError' ? '3분 초과로 취소' : '서버에 연결 못 함'));
     if(!quiet){
       if(e.name === 'AbortError'){
-        addChat('sys', '⏱ 3분이 지나 요청을 취소했어요. 코치 서버가 멈췄을 수 있으니 서버 창을 확인하고, 다시 질문해보세요.');
+        addChat('sys', '⏱ 3분이 지나 요청을 취소했어요. 코치 서버가 멈췄거나 사용량 한도일 수 있어요. 잠시 뒤 다시 질문해보세요.');
       } else {
-        addChat('sys', '⚠️ 코치 서버에 연결하지 못했어요. 게임 폴더의 "홀덤시작.bat"을 실행한 뒤 다시 시도하세요.');
+        addChat('sys', '⚠️ 코치 서버에 연결하지 못했어요. 잠시 뒤 다시 시도해 보세요. 계속 안 되면 서버 상태를 확인해야 해요.');
       }
       pingCoach();
     }
