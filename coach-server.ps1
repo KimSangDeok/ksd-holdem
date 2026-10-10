@@ -74,6 +74,39 @@ $coachModel = 'claude-sonnet-5'
 
 $claudeExe = (Get-Command claude).Source
 
+# 설치된 claude 가 이 서버가 쓰는 플래그를 아는지 시작할 때 한 번 확인한다 (API 호출 없음).
+# 모르는 플래그를 넘기면 코치 호출이 전부 실패하므로, 없는 플래그는 빼고 돈다.
+$script:cliHelp = ''
+$script:cliVersion = ''
+try {
+    $prevEap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+    $script:cliHelp = (& $claudeExe --help 2>$null | Out-String)
+    $script:cliVersion = ((& $claudeExe --version 2>$null | Out-String).Trim())
+    $ErrorActionPreference = $prevEap
+} catch { $ErrorActionPreference = 'Stop' }
+$script:canSystemPromptFile = [bool]($script:cliHelp -match '--system-prompt-file')
+$script:canTools = [bool]($script:cliHelp -match '--tools')
+Write-Host ("  claude {0} / 시스템 프롬프트 파일 {1} / 도구 끄기 {2}" -f
+    $(if ($script:cliVersion) { $script:cliVersion } else { '(버전 확인 실패)' }),
+    $(if ($script:canSystemPromptFile) { '지원' } else { '미지원 → 역할문을 메시지로 보냄' }),
+    $(if ($script:canTools) { '지원' } else { '미지원' }))
+
+# 코치 역할문(PRIME_TEXT)은 게임 화면이 /chat 마다 함께 보내고, 서버가 파일로 두어
+# claude 의 시스템 프롬프트(--system-prompt-file)로 매 호출에 고정한다.
+# 이전에는 첫 호출 메시지 앞에만 붙여서, 서버가 세션을 새로 열면(20회마다·노트 저장 뒤)
+# 역할·말투 규칙 없이 코칭이 나가는 문제가 있었다. 원문은 holdem.html 의 PRIME_TEXT 하나다.
+$primeFile = Join-Path $PSScriptRoot 'coach-prime.txt'
+$script:primeText = ''
+if (Test-Path $primeFile) {
+    try { $script:primeText = [System.IO.File]::ReadAllText($primeFile, (New-Object System.Text.UTF8Encoding($false))) } catch {}
+}
+function Set-PrimeText([string]$text) {
+    if (-not $text) { return }
+    if ($text -eq $script:primeText) { return }
+    [System.IO.File]::WriteAllText($primeFile, $text, (New-Object System.Text.UTF8Encoding($false)))
+    $script:primeText = $text
+}
+
 # 플레이어 프로필 파일: 코치가 관찰한 나의 성향/실수/개선점을 축적
 $profileFile = Join-Path $PSScriptRoot 'player-profile.md'
 
@@ -107,15 +140,35 @@ function Add-ProfilePrefix([string]$message) {
     return $message
 }
 
-function Start-ClaudeJob([string]$message, [string]$resumeId, [string]$model, [bool]$fast) {
+function Add-SessionPrefix([string]$message, [string]$kind) {
+    # 새 대화의 첫 메시지: 코칭 노트를 앞에 붙이고,
+    # 설치된 claude 가 --system-prompt-file 을 모르는 경우에만 역할문도 메시지 앞에 붙인다 (구형 CLI 대비).
+    $send = Add-ProfilePrefix $message
+    if ($kind -ne 'profile' -and -not $script:canSystemPromptFile -and $script:primeText) {
+        $send = $script:primeText + "`n`n" + $send
+    }
+    return $send
+}
+
+function Start-ClaudeJob([string]$message, [string]$resumeId, [string]$model, [bool]$fast, [bool]$useSystemPrompt = $true) {
     if (-not $model) { $model = $coachModel }
+    # 코칭 노트 작성(kind=profile)은 긴 마크다운을 내야 하므로 '250자 이내' 같은 코치 말투 규칙을 걸지 않는다.
+    $sysFile = $null
+    if ($useSystemPrompt -and $script:canSystemPromptFile -and $script:primeText) { $sysFile = $primeFile }
+    $noTools = $script:canTools
     Start-Job -ScriptBlock {
-        param($msg, $resume, $mdl, $exe, $fastMode)
-        $argLine = '-p --output-format json --model ' + $mdl
-        if ($resume) { $argLine += ' --resume ' + $resume }
+        param($msg, $resume, $mdl, $exe, $fastMode, $sysFile, $noTools)
         $psi = New-Object System.Diagnostics.ProcessStartInfo
         $psi.FileName = $exe
-        $psi.Arguments = $argLine
+        # 인자는 한 줄 문자열이 아니라 목록으로 넘긴다. 빈 문자열("")이나 공백이 든 경로도 그대로 전달된다.
+        $psi.ArgumentList.Add('-p')
+        $psi.ArgumentList.Add('--output-format'); $psi.ArgumentList.Add('json')
+        $psi.ArgumentList.Add('--model'); $psi.ArgumentList.Add($mdl)
+        if ($resume) { $psi.ArgumentList.Add('--resume'); $psi.ArgumentList.Add($resume) }
+        # 코치는 파일·명령 도구가 필요 없다. 도구를 끄면 무인증 /chat 으로 들어온 글이
+        # 서버 파일을 읽히는 통로가 닫히고, 호출마다 도구 설명 토큰도 빠진다.
+        if ($noTools) { $psi.ArgumentList.Add('--tools'); $psi.ArgumentList.Add('') }
+        if ($sysFile) { $psi.ArgumentList.Add('--system-prompt-file'); $psi.ArgumentList.Add($sysFile) }
         $psi.UseShellExecute = $false
         $psi.RedirectStandardInput = $true
         $psi.RedirectStandardOutput = $true
@@ -138,7 +191,7 @@ function Start-ClaudeJob([string]$message, [string]$resumeId, [string]$model, [b
         $t = $stdout.Trim()
         if ($t) { return $t }
         return 'ERR:' + $stderr
-    } -ArgumentList $message, $resumeId, $model, $claudeExe, $fast
+    } -ArgumentList $message, $resumeId, $model, $claudeExe, $fast, $sysFile, $noTools
 }
 
 function New-ClaudeTicket([string]$rawMsg, [string]$kind, [string]$model, [bool]$fast) {
@@ -152,12 +205,12 @@ function New-ClaudeTicket([string]$rawMsg, [string]$kind, [string]$model, [bool]
     }
     $send = $rawMsg
     $wasNew = (-not $script:sessionId)
-    if ($wasNew) { $send = Add-ProfilePrefix $rawMsg }
+    if ($wasNew) { $send = Add-SessionPrefix $rawMsg $kind }
     $script:turnCount++
-    $job = Start-ClaudeJob $send $script:sessionId $model $fast
+    $job = Start-ClaudeJob $send $script:sessionId $model $fast ($kind -ne 'profile')
     $id = [guid]::NewGuid().ToString('N')
     $script:jobs[$id] = @{
-        job = $job; kind = $kind; msg = $rawMsg; started = (Get-Date); retried = $false; model = $model
+        job = $job; kind = $kind; msg = $rawMsg; started = (Get-Date); retried = $false; model = $model; fast = $fast
         sessState = $(if ($wasNew) { '새세션' } else { '이어감' })   # 이 값이 속도 비교의 핵심
         turn = $script:turnCount
         inLen = $send.Length
@@ -170,17 +223,30 @@ function New-ClaudeTicket([string]$rawMsg, [string]$kind, [string]$model, [bool]
 # 이 둘이 같이 있어야 '세션이 쌓이면 느려진다'를 숫자로 검증할 수 있다.
 $logFile = Join-Path $PSScriptRoot 'coach-log.txt'
 if (-not (Test-Path $logFile)) {
-    $header = "시각`t종류`t모델`t세션`t세션내순번`t보낸글자`t받은글자`t걸린초`t결과"
+    $header = "시각`t종류`t모델`t세션`t세션내순번`t보낸글자`t받은글자`t걸린초`t결과`t사용량"
     [System.IO.File]::WriteAllText($logFile, $header + "`r`n", (New-Object System.Text.UTF8Encoding($true)))
 }
+# 사용량 열: claude 가 돌려주는 토큰 수와 추정 비용(in=입력 cr=캐시읽기 cw=캐시쓰기 out=출력 cost=달러).
+# 구독으로 쓰는 동안은 청구액이 아니라 참고값이다. 이어가는 호출은 CLI 버전에 따라 세션 누적값일 수 있다.
 function Write-CoachLog([string]$kind, [string]$model, [string]$sessState, [int]$turn,
-                        [int]$inLen, [int]$outLen, [double]$sec, [string]$result) {
+                        [int]$inLen, [int]$outLen, [double]$sec, [string]$result, [string]$usage = '') {
     try {
-        $line = "{0}`t{1}`t{2}`t{3}`t{4}`t{5}`t{6}`t{7:N1}`t{8}" -f `
+        $line = "{0}`t{1}`t{2}`t{3}`t{4}`t{5}`t{6}`t{7:N1}`t{8}`t{9}" -f `
             (Get-Date -Format 'MM-dd HH:mm:ss'), $kind, ($model -replace 'claude-',''),
-            $sessState, $turn, $inLen, $outLen, $sec, $result
+            $sessState, $turn, $inLen, $outLen, $sec, $result, $usage
         [System.IO.File]::AppendAllText($logFile, $line + "`r`n", (New-Object System.Text.UTF8Encoding($false)))
     } catch {}
+}
+function Get-UsageText($obj) {
+    # --output-format json 응답에서 사용량 필드만 뽑는다. 없으면 빈 문자열.
+    try {
+        $u = $obj.usage
+        if ($null -eq $u) { return '' }
+        $cost = $obj.total_cost_usd
+        return ('in={0} cr={1} cw={2} out={3} cost={4}' -f
+            [int64]$u.input_tokens, [int64]$u.cache_read_input_tokens, [int64]$u.cache_creation_input_tokens,
+            [int64]$u.output_tokens, $(if ($null -ne $cost) { ('{0:N4}' -f [double]$cost) } else { '?' }))
+    } catch { return '' }
 }
 
 # 전체 타임라인 로그 — 게임 액션 + 코치 호출을 한 파일에 시간순으로
@@ -384,6 +450,8 @@ while ($listener.IsListening) {
             # 답 전에 과도하게 생각하는 것만 줄인다 (측정: 같은 형식으로 68초 → 15.9초).
             # 모델을 낮추면 카드·상황을 잘못 읽을 수 있어 정확도를 포기하지 않는다.
             $fast = [bool]$body.fast
+            # 화면이 보낸 역할문(PRIME_TEXT)을 파일로 두어 시스템 프롬프트로 쓴다 (내용이 바뀔 때만 다시 씀)
+            if ($body.prime) { Set-PrimeText ([string]$body.prime) }
             $id = New-ClaudeTicket $q $(if ($fast) { 'pre' } else { 'chat' }) $mdl $fast
             Write-Host ("[{0}] 질문 수신 ({1}자, {2}) → Claude 백그라운드 호출 시작" -f (Get-Date -Format 'HH:mm:ss'), $q.Length, $mdl)
             Send-Json $res 200 (@{ ticket = $id } | ConvertTo-Json -Compress)
@@ -394,7 +462,7 @@ while ($listener.IsListening) {
         continue
     }
 
-    # 비동기 결과 조회 (게임이 2초마다 폴링)
+    # 비동기 결과 조회 (게임이 0.5초마다 폴링)
     if ($req.HttpMethod -eq 'GET' -and $req.Url.AbsolutePath -eq '/result') {
         $id = $req.QueryString['id']
         $e = $script:jobs[$id]
@@ -427,7 +495,7 @@ while ($listener.IsListening) {
                 # 이전 세션 이어가기 실패 → 새 대화로 자동 재시도
                 Write-Host "  이전 세션 이어가기 실패 — 새 대화로 재시도" -ForegroundColor Yellow
                 $script:sessionId = $null
-                $e.job = Start-ClaudeJob (Add-ProfilePrefix $e.msg) $null $e.model
+                $e.job = Start-ClaudeJob (Add-SessionPrefix $e.msg $e.kind) $null $e.model $e.fast ($e.kind -ne 'profile')
                 $e.retried = $true
                 $e.started = Get-Date
                 Send-Json $res 200 '{"done":false}'
@@ -448,7 +516,7 @@ while ($listener.IsListening) {
         $reply = [string]$obj.result
         $took = ((Get-Date) - $e.started).TotalSeconds
         Write-CoachLog $e.kind $e.model $e.sessState $e.turn $e.inLen $reply.Length $took `
-            $(if ($e.retried) { '성공(재시도)' } else { '성공' })
+            $(if ($e.retried) { '성공(재시도)' } else { '성공' }) (Get-UsageText $obj)
         # 정확도 검증용 — 코치가 무엇을 보고 무엇이라 답했는지 전문 보관
         Write-GameLog ("┌─ 코치에게 보낸 내용 (" + $e.kind + ", " + ($e.model -replace 'claude-','') + ", " + $e.sessState + " " + $e.turn + "번째)")
         Write-GameLog ($e.msg)
