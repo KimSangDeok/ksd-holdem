@@ -36,7 +36,29 @@
     --bcardH:calc(clamp(34px,6.4vh,60px) * var(--fit));  /* 보드 카드 */
     --mcardH:calc(clamp(42px,7.8vh,74px) * var(--fit));  /* 내 카드 (화면에서 가장 큼) */
     --scardH:calc(clamp(23px,4vh,40px) * var(--fit));    /* 상대 카드 */
+
+    /* ── 상태가 바뀌어도 변하지 않는 자리 높이 ──
+       승률 안내·코치 말풍선·결과 줄·상대 칩의 줄은 내용이 짧아도 같은 높이를 차지한다.
+       (내용 길이에 따라 높이가 바뀌면 무대 위끝과 카드 배율이 상태마다 움직인다) */
+    --fbarH:clamp(10px,1.5vh,15px);
+    --ftextLH:calc(clamp(11px,1.6vh,12.5px) * 1.28);
+    --ftLines:2;                                  /* 승률 글줄 수 (넓은 화면·아주 짧은 화면은 1) */
+    --fsubLH:calc(clamp(9.5px,1.3vh,10.5px) * 1.22);
+    --ogap:clamp(2px,.4vh,4px);
+    --fsubH:calc(var(--fsubLH) + var(--ogap));    /* 검산줄 (세로 700px 이하에서는 0) */
+    --oddsH:calc(var(--fbarH) + var(--ogap) + var(--ftextLH) * var(--ftLines) + var(--fsubH));
+    --ctxH:calc(clamp(10.5px,1.55vh,12px) * 1.3 * 2);                                    /* 코치 말풍선 2줄 */
+    --msgFont:clamp(11.5px,1.6vh,13px);
+    --msgLH:calc(var(--msgFont) * 1.25);
+    --msgLines:1;                                 /* 결과 줄 (세로 800px 이상은 2줄) */
+    --msgPad:10px;                                /* #msg 상하 패딩 3+3 · 테두리 1+1 · 줄 패딩 1+1 */
+    --wbFont:clamp(9.5px,1.4vh,12px);
+    --statusH:calc(var(--wbFont) * 1.3 + 2px);    /* 승리 배지 = 손익 줄 자리 */
+    --pillH:calc(clamp(9px,1.35vh,11.5px) * 1.2 + 4px);   /* 마지막 액션 알약 */
+    --s0boxH:calc(clamp(11px,1.75vh,14px) * 1.25 + clamp(11px,1.7vh,15px) * 1.3 + clamp(8.5px,1.25vh,11px) * 1.24 + 4px);  /* 내 명찰 3줄 */
   }
+  /*svh*/@supports (height:1svh){ :root{--pad:clamp(6px,1.1svh,12px);--bcardH:calc(clamp(34px,6.4svh,60px) * var(--fit));--mcardH:calc(clamp(42px,7.8svh,74px) * var(--fit));--scardH:calc(clamp(23px,4svh,40px) * var(--fit));--fbarH:clamp(10px,1.5svh,15px);--ftextLH:calc(clamp(11px,1.6svh,12.5px) * 1.28);--fsubLH:calc(clamp(9.5px,1.3svh,10.5px) * 1.22);--ogap:clamp(2px,.4svh,4px);--ctxH:calc(clamp(10.5px,1.55svh,12px) * 1.3 * 2);--msgFont:clamp(11.5px,1.6svh,13px);--wbFont:clamp(9.5px,1.4svh,12px);--pillH:calc(clamp(9px,1.35svh,11.5px) * 1.2 + 4px);--s0boxH:calc(clamp(11px,1.75svh,14px) * 1.25 + clamp(11px,1.7svh,15px) * 1.3 + clamp(8.5px,1.25svh,11px) * 1.24 + 4px)} }
+  @media (min-height:800px){ :root{--msgLines:2} #msg{-webkit-line-clamp:2} }
 
   body{
     font-family:'Segoe UI','Malgun Gothic','Apple SD Gothic Neo',sans-serif;
@@ -54,6 +76,7 @@
     font-size:clamp(12.5px,1.8vh,14px); font-weight:700; cursor:pointer; font-family:inherit;
     box-shadow:0 2px 6px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.07);
   }
+  /*svh*/@supports (height:1svh){ button{padding:clamp(7px,1.2svh,10px) clamp(11px,1.3vw,16px);font-size:clamp(12.5px,1.8svh,14px)} }
   button:hover{background:linear-gradient(180deg,#35414f,#232c37)}
   button:disabled{opacity:.4;cursor:default}
 
@@ -91,6 +114,7 @@
     gap:clamp(8px,1vw,14px);padding:0 clamp(10px,1.4vw,20px);
     font-size:clamp(12px,1.7vh,13.5px);color:var(--ink2);flex-wrap:wrap;
   }
+  /*svh*/@supports (height:1svh){ #topbar{min-height:clamp(44px,6.4svh,54px);font-size:clamp(12px,1.7svh,13.5px)} }
   /* 데스크톱에서는 음량·효과음 묶음이 그대로 보이므로 🔊 버튼은 중복이다 */
   #sndToggle{display:none}
   #topbar b{color:var(--ink)}
@@ -101,13 +125,14 @@
 
   /* ───────── 차례 안내 배너 ───────── */
   #msgRow{flex:none;display:flex;align-items:center;justify-content:center;
-          min-height:clamp(26px,3.6vh,34px);padding:1px clamp(10px,1.4vw,20px)}
+          height:calc(var(--msgLH) * var(--msgLines) + var(--msgPad));padding:1px clamp(10px,1.4vw,20px)}
   #msg{
-    width:100%;min-height:24px;
-    display:flex;align-items:center;justify-content:center;gap:7px;
-    font-size:clamp(11.5px,1.6vh,13px);font-weight:800;color:#cdd9e5;
+    width:100%;
+    display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:1;overflow:hidden;
+    font-size:var(--msgFont);line-height:1.25;font-weight:800;color:#cdd9e5;
     background:rgba(255,255,255,.035);border:1px solid var(--line);
     padding:3px 12px;border-radius:9px;text-align:center;
+    word-break:keep-all;overflow-wrap:break-word;
   }
   #msg:empty{display:none}
   #msg.myturn{
@@ -128,6 +153,7 @@
     flex:none;display:flex;flex-direction:column;gap:clamp(3px,.5vh,5px);
     padding:clamp(3px,.5vh,5px) clamp(10px,1.4vw,20px) 0;
   }
+  /*svh*/@supports (height:1svh){ #hud{gap:clamp(3px,.5svh,5px);padding:clamp(3px,.5svh,5px) clamp(10px,1.4vw,20px) 0} }
 
   /* ── 승률 = 20판 중 몇 판 (자연빈도 배열) ── */
   .gauge{
@@ -138,14 +164,18 @@
     box-shadow:0 6px 16px rgba(0,0,0,.34), inset 0 1px 0 rgba(255,255,255,.05);
     display:flex;flex-direction:column;gap:clamp(2px,.4vh,4px);
   }
+  /*svh*/@supports (height:1svh){ .gauge{padding:clamp(4px,.7svh,8px) clamp(8px,1.2vw,12px);gap:clamp(2px,.4svh,4px)} }
   .ghead{display:flex;align-items:baseline;gap:5px;min-width:0}
   .ghead .gl{font-size:clamp(9.5px,1.35vh,11px);color:var(--ink3);font-weight:700;flex:none}
+  /*svh*/@supports (height:1svh){ .ghead .gl{font-size:clamp(9.5px,1.35svh,11px)} }
   .ghead .gv{
     font-size:clamp(16px,2.3vh,21px);font-weight:800;color:var(--green);
     letter-spacing:-.6px;line-height:1;text-shadow:0 0 14px rgba(63,209,138,.3);flex:none;
     font-variant-numeric:tabular-nums;
   }
+  /*svh*/@supports (height:1svh){ .ghead .gv{font-size:clamp(16px,2.3svh,21px)} }
   .ghead .gu{font-size:clamp(10px,1.45vh,12px);font-weight:800;color:var(--ink2);flex:none}
+  /*svh*/@supports (height:1svh){ .ghead .gu{font-size:clamp(10px,1.45svh,12px)} }
   .gbadge{
     margin-left:auto;align-self:center;flex:none;white-space:nowrap;
     height:20px;padding:0 8px;border-radius:99px;
@@ -153,6 +183,7 @@
     background:rgba(255,255,255,.05);border:1px solid var(--line2);
     font-size:clamp(9.5px,1.35vh,11px);font-weight:800;color:var(--ink2);
   }
+  /*svh*/@supports (height:1svh){ .gbadge{font-size:clamp(9.5px,1.35svh,11px)} }
   .gbadge.good{background:var(--greenBg);border-color:rgba(63,209,138,.4);color:var(--green)}
   .gbadge.bad{background:rgba(239,106,114,.12);border-color:rgba(239,106,114,.4);color:var(--red)}
   .gauge.warn .ghead .gv{color:var(--red);text-shadow:0 0 14px rgba(239,106,114,.28)}
@@ -161,13 +192,16 @@
   #oddsHint{
     min-width:0;display:flex;flex-direction:column;gap:clamp(2px,.4vh,4px);
     font-variant-numeric:tabular-nums;
-    /* 문구가 길어져도 게이지가 무대(카드) 자리를 먹지 않게 상한을 둔다 */
-    max-height:clamp(46px,9vh,76px);overflow:hidden;
+    /* 상태(콜 금액 유무·문구 길이)와 무관하게 같은 높이 — 짧으면 아래가 빈칸으로 남는다 */
+    height:var(--oddsH);min-height:var(--oddsH);max-height:var(--oddsH);overflow:hidden;
   }
-  #oddsHint:empty{display:none}
+  /*svh*/@supports (height:1svh){ #oddsHint{gap:clamp(2px,.4svh,4px)} }
+  /* 게이지가 넓으면(≥700px) 가장 긴 문구도 한 줄에 들어가므로 1줄만 잡는다 */
+  @media (min-width:700px){ :root{--ftLines:1} .ftext{-webkit-line-clamp:1} }
   /* 20칸 배열: 한 칸 = 20판 중 1판 = 5% */
   .fbar{position:relative;display:flex;gap:clamp(2px,.4vw,3px);flex:none;
         height:clamp(10px,1.5vh,15px)}
+  /*svh*/@supports (height:1svh){ .fbar{height:clamp(10px,1.5svh,15px)} }
   .fcell{flex:1;min-width:0;border-radius:4px;background:#1a222c;border:1px solid #2b3744;
          box-shadow:inset 0 1px 2px rgba(0,0,0,.4)}
   /* 본전 구간(짙은 초록) */
@@ -182,10 +216,12 @@
   .ftext{font-size:clamp(11px,1.6vh,12.5px);color:var(--ink);line-height:1.28;
          letter-spacing:-.3px;word-break:keep-all;overflow-wrap:break-word;
          display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+  /*svh*/@supports (height:1svh){ .ftext{font-size:clamp(11px,1.6svh,12.5px)} }
   .ftext .good,.ftext .bad{white-space:nowrap}
   .ftext b{color:var(--green);font-weight:800}
   .fsub{font-size:clamp(9.5px,1.3vh,10.5px);color:var(--ink2);line-height:1.22;
         letter-spacing:-.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  /*svh*/@supports (height:1svh){ .fsub{font-size:clamp(9.5px,1.3svh,10.5px)} }
   #oddsHint .good{color:var(--green);font-weight:800}
   #oddsHint .bad{color:var(--red);font-weight:800}
 
@@ -198,6 +234,7 @@
     font-size:clamp(13px,1.9vh,16px);color:var(--coach);
     box-shadow:0 2px 6px rgba(0,0,0,.3);
   }
+  /*svh*/@supports (height:1svh){ .cav{width:clamp(26px,3.6svh,31px);height:clamp(26px,3.6svh,31px);font-size:clamp(13px,1.9svh,16px)} }
   .bubble{
     position:relative;flex:1 1 auto;min-width:0;
     background:linear-gradient(180deg,#1d2835,#18212c);
@@ -211,24 +248,30 @@
   }
   .chead{display:flex;align-items:center;gap:6px;min-width:0}
   .cname{font-size:clamp(9px,1.3vh,10.5px);font-weight:800;color:var(--coach);flex:none}
+  /*svh*/@supports (height:1svh){ .cname{font-size:clamp(9px,1.3svh,10.5px)} }
   .cstat{
     margin-left:auto;flex:none;display:flex;align-items:center;gap:4px;white-space:nowrap;
     font-size:clamp(9px,1.3vh,10.5px);font-weight:700;
     padding:1px 7px;border-radius:99px;
     background:rgba(255,255,255,.05);border:1px solid var(--line2);color:var(--ink3);
   }
+  /*svh*/@supports (height:1svh){ .cstat{font-size:clamp(9px,1.3svh,10.5px)} }
   .cstat i{width:5px;height:5px;border-radius:50%;background:currentColor;display:block;flex:none}
   .cstat.on{background:var(--greenBg);border-color:rgba(63,209,138,.3);color:var(--green)}
   .ctx{
     font-size:clamp(10.5px,1.55vh,12px);line-height:1.3;color:var(--ink);letter-spacing:-.3px;
     display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;
     word-break:keep-all;overflow-wrap:break-word;
+    height:var(--ctxH);   /* 1줄이든 2줄이든 같은 높이 */
   }
+  /*svh*/@supports (height:1svh){ .ctx{font-size:clamp(10.5px,1.55svh,12px)} }
+  .chead{min-height:18px}
   .ctx b{color:var(--green);font-weight:800}
   /* 선행 분석 진행 알약 — 말풍선 머리에 붙는다 */
   #preState{font-size:clamp(9px,1.3vh,10.5px);font-weight:800;border-radius:99px;
             padding:1px 7px;border:1px solid var(--line2);white-space:nowrap;flex:none;
             margin-left:auto;color:var(--ink3)}
+  /*svh*/@supports (height:1svh){ #preState{font-size:clamp(9px,1.3svh,10.5px)} }
   #preState:empty{display:none}
   #preState.work{color:var(--gold);border-color:rgba(245,196,99,.4);background:rgba(245,196,99,.1)}
   #preState.ready{color:var(--green);border-color:rgba(63,209,138,.45);background:var(--greenBg)}
@@ -241,37 +284,47 @@
     display:flex;align-items:stretch;gap:clamp(4px,.8vw,7px);min-width:0;
     height:clamp(23px,3.2vh,29px);
   }
+  /*svh*/@supports (height:1svh){ #actPreview{height:clamp(23px,3.2svh,29px)} }
   #actPreview.off{visibility:hidden}     /* 자리는 남기고 감춘다 → 화면이 튀지 않는다 */
   #actPreview .apl{
     flex:none;align-self:center;white-space:nowrap;
     font-size:clamp(9px,1.3vh,10.5px);font-weight:700;color:var(--ink3);letter-spacing:-.2px;
   }
+  /*svh*/@supports (height:1svh){ #actPreview .apl{font-size:clamp(9px,1.3svh,10.5px)} }
   #actPreview .act{
-    flex:1 1 0;min-width:0;
+    flex:1 1 0;min-width:0;position:relative;
     display:flex;align-items:center;justify-content:center;gap:4px;
     border-radius:8px;border:1px solid var(--line2);
-    background:rgba(255,255,255,.03);padding:0 5px;overflow:hidden;
+    background:rgba(255,255,255,.03);padding:0 4px;overflow:visible;gap:3px;
   }
-  #actPreview .act .t{font-size:clamp(9.5px,1.35vh,11px);font-weight:800;color:var(--ink2);white-space:nowrap}
+  #actPreview .aplS{display:none}
+  /* 라벨(폴드/콜/레이즈)이 먼저 줄고, 금액은 끝까지 보인다 */
+  #actPreview .act .t{font-size:clamp(9.5px,1.35vh,11px);font-weight:800;color:var(--ink2);white-space:nowrap;
+    flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
+  /*svh*/@supports (height:1svh){ #actPreview .act .t{font-size:clamp(9.5px,1.35svh,11px)} }
   #actPreview .act .s2{font-size:clamp(9px,1.3vh,10.5px);font-weight:700;color:var(--ink3);
-    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    white-space:nowrap;flex:none}
+  /*svh*/@supports (height:1svh){ #actPreview .act .s2{font-size:clamp(9px,1.3svh,10.5px)} }
   #actPreview .a-call{border-color:rgba(63,209,138,.28);background:var(--greenBg)}
   #actPreview .a-call .t{color:var(--green)}
   #actPreview .a-raise{border-color:rgba(245,196,99,.28);background:rgba(245,196,99,.07)}
   #actPreview .a-raise .t{color:var(--gold)}
-  #actPreview .rec-pin{position:static;transform:none;flex:none;font-size:8.5px;
-    padding:0 5px;box-shadow:none;line-height:1.5}
+  /* '코치 추천' 표는 칸 오른쪽 위 모서리에 띄운다 (칸의 폭을 먹지 않는다) */
+  #actPreview .rec-pin{position:absolute;top:-7px;right:-2px;left:auto;transform:none;
+    font-size:8px;padding:0 5px;line-height:1.5;box-shadow:0 1px 4px rgba(0,0,0,.4)}
   #actPreview .tip{
     flex:1 1 auto;min-width:0;align-self:center;text-align:center;
     font-size:clamp(9px,1.3vh,10.5px);color:var(--ink3);letter-spacing:-.2px;
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   }
+  /*svh*/@supports (height:1svh){ #actPreview .tip{font-size:clamp(9px,1.3svh,10.5px)} }
   #actPreview .tip b{color:var(--ink2);font-weight:800}
 
   /* ═════════ 무대 (상대 / 보드 / 내 패) ═════════ */
   #tableWrap{flex:1;min-height:0;position:relative;display:flex;
              align-items:stretch;justify-content:center;
              padding:clamp(4px,.8vh,8px) clamp(10px,1.4vw,20px) 0}
+  /*svh*/@supports (height:1svh){ #tableWrap{padding:clamp(4px,.8svh,8px) clamp(10px,1.4vw,20px) 0} }
 
   /* 펠트 타원·나무 테두리·조명 없음. 평면 학습 화면. */
   #table{
@@ -283,6 +336,7 @@
     gap:clamp(3px,.7vh,10px);
     overflow:hidden;
   }
+  /*svh*/@supports (height:1svh){ #table{gap:clamp(3px,.7svh,10px)} }
 
   /* ── 상대 3명: 가로 정보칩 ── */
   .opps{display:flex;gap:clamp(4px,.8vw,8px);flex:none;align-items:stretch}
@@ -293,6 +347,7 @@
     padding:clamp(4px,.7vh,7px) clamp(5px,.7vw,8px);
     display:flex;
   }
+  /*svh*/@supports (height:1svh){ .opp{padding:clamp(4px,.7svh,7px) clamp(5px,.7vw,8px)} }
   .opp:has(.seat.acting){
     border-color:rgba(245,196,99,.5);
     box-shadow:0 0 0 1px rgba(245,196,99,.14), 0 4px 12px rgba(0,0,0,.35);
@@ -308,7 +363,10 @@
   .seat{position:relative;min-width:0;max-width:100%;flex:1 1 auto;
         display:flex;flex-direction:column;align-items:stretch;
         gap:clamp(1px,.35vh,4px);transition:opacity .2s}
-  .seat.folded{opacity:.45}
+  /*svh*/@supports (height:1svh){ .seat{gap:clamp(1px,.35svh,4px)} }
+  /* 접은 자리: 카드와 숫자만 흐리게 — '폴드' 표시와 이름은 읽히게 둔다 */
+  .seat.folded .cards,.seat.folded .ptype,.seat.folded .pstack,.seat.folded .contribLine{opacity:.45}
+  .seat.folded .pname{color:var(--ink2)}
   .seat .box{position:static;display:flex;align-items:center;gap:6px;min-width:0;
              background:none;border:0;padding:0;box-shadow:none;border-radius:0}
   /* 딜러 버튼이 있는 자리만 오른쪽 위를 비워 둔다 (paintHud 가 hasD 를 붙인다) */
@@ -317,32 +375,41 @@
   .seat .pname,.seat .ptype,.seat .pstack,.seat .lastAct,
   .seat .contribLine,.rebuyInfo{overflow:hidden;text-overflow:ellipsis;max-width:100%;white-space:nowrap}
   .seat .pname{font-weight:800;font-size:clamp(11px,1.75vh,14px);line-height:1.25;color:var(--ink)}
+  /*svh*/@supports (height:1svh){ .seat .pname{font-size:clamp(11px,1.75svh,14px)} }
   .seat .ptype{font-size:clamp(8.5px,1.25vh,11px);line-height:1.3;color:var(--ink2);
                font-weight:700;letter-spacing:-.2px}
+  /*svh*/@supports (height:1svh){ .seat .ptype{font-size:clamp(8.5px,1.25svh,11px)} }
   .seat .pstack{font-size:clamp(11px,1.7vh,15px);font-weight:800;color:var(--gold);
                 font-variant-numeric:tabular-nums;line-height:1.3}
+  /*svh*/@supports (height:1svh){ .seat .pstack{font-size:clamp(11px,1.7svh,15px)} }
   .seat .pstack em{font-style:normal;font-size:.72em;color:var(--red);margin-left:3px}
   .seat .contribLine{font-size:clamp(8.5px,1.25vh,11px);color:var(--ink2);font-weight:700}
+  /*svh*/@supports (height:1svh){ .seat .contribLine{font-size:clamp(8.5px,1.25svh,11px)} }
   .seat .contribLine b{color:#cfe0d4;font-weight:800}
   .seat .contribLine .nowBet{display:inline;color:var(--green);font-weight:800}
   .rebuyInfo{font-size:clamp(8px,1.2vh,10.5px);color:var(--ink3);font-weight:700;
              font-variant-numeric:tabular-nums}
+  /*svh*/@supports (height:1svh){ .rebuyInfo{font-size:clamp(8px,1.2svh,10.5px)} }
   .rebuyInfo .pl-p{color:var(--green);font-weight:800}
   .rebuyInfo .pl-m{color:var(--red);font-weight:800}
   .rebuyInfo .rbShort{display:none}
-  .seat:not(#seat0) .rbFull{display:none}
-  .seat:not(#seat0) .rbShort{display:inline}
+  .opp .rbFull{display:none}
+  .opp .rbShort{display:inline}
 
   /* 상대 칩 안쪽 배치: 이름(+D) / 성향 태그 / 스택 · 이번 베팅 / 카드 · 마지막 액션 */
-  .opp .seat{flex-direction:row;flex-wrap:wrap;align-items:center;
-             gap:1px clamp(3px,.6vw,6px)}
-  .opp .box{flex:1 1 100%}
-  .opp .cards{flex:0 0 auto}
-  .opp .seatFoot{flex:1 1 auto;justify-content:flex-end;min-width:0}
-  .opp .rebuyInfo{flex:1 1 100%;text-align:right}
-  .opp .winBadge{flex:1 1 100%;order:-1}
+  /* 세 줄(명찰 / 카드+알약 / 배지·손익)의 높이를 격자로 고정한다 — 접었든, 이겼든, 알약이 길든 같은 높이 */
+  .opp .seat{display:grid;grid-template-columns:auto minmax(0,1fr);
+             grid-template-rows:auto max(var(--scardH),var(--pillH)) var(--statusH);
+             grid-template-areas:"box box" "cards foot" "st st";
+             align-items:center;gap:1px clamp(3px,.6vw,6px)}
+  .opp .box{grid-area:box}
+  .opp .cards{grid-area:cards}
+  .opp .seatFoot{grid-area:foot;justify-content:flex-end;min-width:0}
+  .opp .seatFoot .lastAct{min-width:0}
+  .opp .statusRow{grid-area:st;justify-content:flex-end}
+  .opp .rebuyInfo{text-align:right}
   .opp .binfo{display:grid;grid-template-columns:auto minmax(0,1fr);
-              grid-template-areas:"nm nm" "tp tp" "stk bet";align-items:baseline;gap:0 5px}
+              grid-template-areas:"nm nm" "tp tp" "stk bet";align-items:center;gap:0 5px}
   .opp .pname{grid-area:nm}
   .opp .ptype{
     grid-area:tp;justify-self:start;margin:1px 0;
@@ -354,7 +421,7 @@
   .opp .ptype.t-loose{background:rgba(245,196,99,.13);border-color:rgba(245,196,99,.3);color:var(--gold)}
   .opp .pstack{grid-area:stk}
   .opp .contribLine{grid-area:bet;justify-self:end;min-width:0;
-    padding:1px 5px;border-radius:6px;
+    padding:0 5px;line-height:1.15;border-radius:6px;
     background:rgba(154,169,186,.1);border:1px solid rgba(154,169,186,.2)}
   /* 좁은 칩에 두 숫자를 다 넣으면 잘린다 — 이번 베팅은 아래 알약(콜 200 / 벳 400)이 보여준다 */
   .opp .contribLine .nowBet{display:none}
@@ -386,6 +453,7 @@
     background:rgba(255,255,255,.06);border:1px solid var(--line2);
     border-radius:99px;padding:1px 8px;
   }
+  /*svh*/@supports (height:1svh){ .seat .lastAct{font-size:clamp(9px,1.35svh,11.5px)} }
   .seat .lastAct.b-bet{background:rgba(245,196,99,.15);border-color:rgba(245,196,99,.32);color:var(--gold)}
   .seat .lastAct.b-call{background:rgba(154,169,186,.12);border-color:rgba(154,169,186,.24);color:#b7c4d2}
   .seat .lastAct.b-fold{background:rgba(239,106,114,.1);border-color:rgba(239,106,114,.26);color:#ef8f95}
@@ -394,26 +462,30 @@
   .seat .betchip{display:flex;align-items:center;justify-content:center;flex:none}
   .seat .betchip:empty{display:none}
 
-  /* 배지 */
-  .seat .winBadge{
-    display:block;background:linear-gradient(180deg,#ffd76a,#e8a72e);color:#241a00;
-    font-weight:900;border-radius:999px;padding:1px 9px;font-size:clamp(9.5px,1.4vh,12px);
-    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  /* 상태 줄: 승리 배지 또는 손익 줄이 들어가는 자리 — 비어 있어도 높이를 지킨다
+     (상대는 칩의 셋째 줄, 나는 오른쪽 꼬리표 칸 .mymeta 의 셋째 줄) */
+  .statusRow{height:var(--statusH);min-height:var(--statusH);
+    display:flex;align-items:center;min-width:0;overflow:hidden}
+  .mymeta .statusRow{flex:none;align-self:center;max-width:100%;justify-content:center}
+  /* 배지: 금액이 먼저, 족보 이름은 자리가 모자라면 줄어든다 (금액은 끝까지 보인다) */
+  .winBadge{
+    display:inline-flex;align-items:center;gap:4px;max-width:100%;min-width:0;
+    height:var(--statusH);line-height:1;
+    background:linear-gradient(180deg,#ffd76a,#e8a72e);color:#241a00;
+    font-weight:900;border-radius:999px;padding:0 8px;font-size:var(--wbFont);
+    white-space:nowrap;
     box-shadow:0 0 14px rgba(255,213,79,.6);animation:winPop .3s ease-out;
   }
-  .seat .winBadge.returnBadge{background:linear-gradient(180deg,#4a5568,#2d3748);color:#e2e8f0;
-                              box-shadow:0 2px 8px rgba(0,0,0,.5)}
+  .winBadge .wbAmt{flex:none;font-style:normal}
+  .winBadge .wbLbl{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
+  .winBadge.returnBadge{background:linear-gradient(180deg,#4a5568,#2d3748);color:#e2e8f0;
+                        box-shadow:0 2px 8px rgba(0,0,0,.5)}
   @keyframes winPop{0%{transform:scale(.5);opacity:0}100%{transform:scale(1);opacity:1}}
-  /* 폴드 도장은 명찰 한가운데 — 칩 밖으로 나가면 잘린다 */
-  /* 폴드한 상대는 카드가 그려지지 않는다 → 도장을 칩 아래쪽 빈 곳에 찍어 스택을 가리지 않게 */
-  .foldStamp{
-    position:absolute;left:50%;bottom:3px;top:auto;transform:translateX(-50%) rotate(-8deg);
-    color:#ff7b6e;border:2px solid #ff7b6e;border-radius:6px;padding:0 6px;
-    font-weight:900;font-size:10px;letter-spacing:2px;background:rgba(30,0,0,.82);
-    pointer-events:none;z-index:5;white-space:nowrap;
-  }
-  /* 내 자리는 접어도 카드를 계속 보여주므로 도장을 오른쪽에 붙인다 */
-  #seat0 .foldStamp{left:auto;right:6px;bottom:auto;top:50%;transform:translateY(-50%) rotate(-8deg)}
+  /* 폴드 표시는 카드 위에 덮지 않는다 — 핸드가 끝나면 전원 패를 공개하므로 도장이 카드·손익·스택을 가렸다.
+     상대: 마지막 액션 알약 자리에 '폴드'(빨강). 나: 폰에서는 알약 줄이 숨으므로 이름 옆 꼬리표로. */
+  .foldTag{display:none;font-style:normal;font-weight:800;font-size:.78em;color:#ef8f95;
+    border:1px solid rgba(239,106,114,.45);background:rgba(239,106,114,.1);
+    border-radius:99px;padding:0 5px;margin-left:4px;vertical-align:1px;white-space:nowrap}
   .seat .posBadge{display:none}   /* 자리 표시는 딜러 버튼 D 하나로 충분 */
 
   /* ───────── 카드 ───────── */
@@ -446,21 +518,24 @@
   /* ── 보드 + 팟 ── */
   #boardArea{
     flex:none;display:flex;align-items:center;justify-content:center;
-    gap:clamp(5px,1vw,10px);flex-wrap:wrap;min-width:0;z-index:2;
+    gap:clamp(5px,1vw,10px);flex-wrap:nowrap;min-width:0;z-index:2;
     background:linear-gradient(180deg,rgba(28,38,48,.5),rgba(20,27,35,.5));
     border:1px solid var(--line);border-radius:var(--r);
     padding:clamp(5px,.9vh,9px) clamp(7px,1vw,11px);
   }
-  #board{display:flex;gap:clamp(3px,.6vw,7px);justify-content:center;flex:1 1 auto;min-width:0}
+  /*svh*/@supports (height:1svh){ #boardArea{padding:clamp(5px,.9svh,9px) clamp(7px,1vw,11px)} }
+  #board{display:flex;gap:clamp(3px,.6vw,7px);justify-content:center;flex:0 0 auto;min-width:0}
   .slotWrap{display:flex;flex-direction:column;align-items:center;min-width:0}
   .slotLabel{font-size:clamp(8px,1.2vh,10px);color:var(--ink3);margin-top:2px;white-space:nowrap}
+  /*svh*/@supports (height:1svh){ .slotLabel{font-size:clamp(8px,1.2svh,10px)} }
   #potLine{
-    order:-1;flex:none;white-space:nowrap;
+    order:-1;flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
     font-size:clamp(11px,1.7vh,14px);font-weight:800;color:var(--gold);
     font-variant-numeric:tabular-nums;
     background:rgba(245,196,99,.09);border:1px solid rgba(245,196,99,.28);
     border-radius:9px;padding:clamp(3px,.6vh,6px) clamp(8px,1.1vw,13px);
   }
+  /*svh*/@supports (height:1svh){ #potLine{font-size:clamp(11px,1.7svh,14px);padding:clamp(3px,.6svh,6px) clamp(8px,1.1vw,13px)} }
 
   /* ── 내 패 ── */
   .mine{
@@ -470,20 +545,23 @@
     border:1px solid rgba(63,209,138,.26);border-radius:var(--r);
     padding:clamp(5px,.9vh,9px) clamp(7px,1vw,11px);
   }
+  /*svh*/@supports (height:1svh){ .mine{padding:clamp(5px,.9svh,9px) clamp(7px,1vw,11px)} }
   #seat0{flex-direction:row;align-items:center;flex-wrap:wrap;
          gap:clamp(3px,.6vh,6px) clamp(6px,1.2vw,11px)}
+  /*svh*/@supports (height:1svh){ #seat0{gap:clamp(3px,.6svh,6px) clamp(6px,1.2vw,11px)} }
   #seat0 .cards{order:-1;flex:none}           /* 내 카드는 왼쪽으로 */
   #seat0 .box{flex:1 1 0;min-width:0}
   #seat0 .dbtn{display:none}   /* 내 자리 이름(딜러/BB…)은 아래 꼬리표 줄에 글자로 적는다 */
-  #seat0 .binfo{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 7px}
+  #seat0 .binfo{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 7px;align-content:flex-start;
+                min-height:var(--s0boxH)}   /* 이름 · 스택 · 판 금액 3줄 — 줄이 없어도 같은 높이 */
   #seat0 .pname{flex:none}
   #seat0 .ptype{flex:none;font-size:clamp(8.5px,1.2vh,10.5px);color:var(--ink3)}
+  /*svh*/@supports (height:1svh){ #seat0 .ptype{font-size:clamp(8.5px,1.2svh,10.5px)} }
   #seat0 .pstack{flex:1 1 100%}
   #seat0 .contribLine{flex:1 1 100%}
   #seat0 .seatFoot{flex:none;margin-left:auto}
-  #seat0 .rebuyInfo{flex:1 1 100%;margin:0}
-  #seat0 .winBadge{flex:1 1 100%;order:-2}
-  #seat0.winner .rebuyInfo{display:none}
+  .mymeta .rebuyInfo{margin:0}
+  #seat0 .cards{min-height:var(--mcardH)}
 
   /* 내 패 상태 꼬리표 — 지금 무슨 패인지 한 줄로 */
   #seat0{flex:1 1 auto;min-width:0}
@@ -496,6 +574,7 @@
     background:linear-gradient(180deg,#4ae095,#2fb976);
     box-shadow:0 2px 8px rgba(63,209,138,.28);white-space:nowrap;
   }
+  /*svh*/@supports (height:1svh){ .mtag{font-size:clamp(11px,1.65svh,13px)} }
   .mtag:empty{display:none}
   .mtag.draw{background:linear-gradient(180deg,#7fb4ff,#4a86dd);color:#06152a;
              box-shadow:0 2px 8px rgba(127,180,255,.26)}
@@ -503,6 +582,7 @@
   .msub{max-width:100%;min-width:0;
         font-size:clamp(9.5px,1.35vh,11px);color:var(--ink2);line-height:1.25;
         letter-spacing:-.2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /*svh*/@supports (height:1svh){ .msub{font-size:clamp(9.5px,1.35svh,11px)} }
   .msub b{color:var(--green);font-weight:800}
   .msub:empty{display:none}
 
@@ -514,6 +594,7 @@
     box-shadow:0 3px 8px rgba(0,0,0,.6), inset 0 -3px 6px rgba(0,0,0,.35),
                inset 0 3px 5px rgba(255,255,255,.3);
   }
+  /*svh*/@supports (height:1svh){ .chip{--chipSize:clamp(13px,2.2svh,20px)} }
   .chip:first-child{margin-left:0}
   .chip::after{content:'';position:absolute;inset:3px;border-radius:50%;
                border:2px dashed rgba(255,255,255,.72)}
@@ -521,6 +602,7 @@
     margin-left:6px;font-size:clamp(9px,1.4vh,12px);font-weight:800;color:#fff;
     text-shadow:0 1px 4px #000;font-variant-numeric:tabular-nums;white-space:nowrap;
   }
+  /*svh*/@supports (height:1svh){ .chipAmt{font-size:clamp(9px,1.4svh,12px)} }
   /* 팟이 승자에게 날아가는 칩 */
   .flyChip{
     position:absolute;z-index:9;margin-left:0;pointer-events:none;
@@ -535,6 +617,7 @@
     display:flex;flex-direction:column;align-items:stretch;gap:clamp(4px,.7vh,7px);
     height:clamp(164px,21vh,186px);justify-content:flex-start;overflow:hidden;
   }
+  /*svh*/@supports (height:1svh){ #controls{padding:clamp(5px,.9svh,10px) clamp(10px,1.4vw,20px) clamp(7px,1.2svh,14px);gap:clamp(4px,.7svh,7px);height:clamp(164px,21svh,186px)} }
   .ctlRow{display:flex;gap:clamp(4px,.7vw,8px);align-items:center;justify-content:center;
           flex-wrap:nowrap;width:100%;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
   .ctlRow::-webkit-scrollbar{display:none}
@@ -543,6 +626,7 @@
   .ctlMain{overflow:visible;padding-top:9px}
   .ctlInfo:empty{display:none}
   #turnHint{color:var(--gold);font-weight:800;font-size:clamp(11.5px,1.7vh,13.5px);flex:none}
+  /*svh*/@supports (height:1svh){ #turnHint{font-size:clamp(11.5px,1.7svh,13.5px)} }
   #turnHint:empty{display:none}
   #btnReserveFold{margin-left:auto;font-size:12px;padding:6px 12px;flex:none}
   #btnReserveFold.on{background:linear-gradient(180deg,#a3453a,#7a2f27);border-color:#c0604f;color:#fff}
@@ -553,12 +637,15 @@
     display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
     position:relative;box-shadow:0 4px 10px rgba(0,0,0,.34);
   }
+  /*svh*/@supports (height:1svh){ #btnFold,#btnCall,#btnRaise{height:clamp(46px,7svh,54px)} }
   #btnFold .t,#btnCall .t,#btnRaise .t{
     font-size:clamp(13px,1.95vh,15px);font-weight:800;letter-spacing:-.4px;line-height:1.05;
     white-space:nowrap}
+  /*svh*/@supports (height:1svh){ #btnFold .t,#btnCall .t,#btnRaise .t{font-size:clamp(13px,1.95svh,15px)} }
   #btnFold .s2,#btnCall .s2,#btnRaise .s2{
     font-size:clamp(9.5px,1.35vh,11px);font-weight:700;letter-spacing:-.2px;line-height:1.05;
     white-space:nowrap;opacity:.85}
+  /*svh*/@supports (height:1svh){ #btnFold .s2,#btnCall .s2,#btnRaise .s2{font-size:clamp(9.5px,1.35svh,11px)} }
   #btnFold{flex:1 1 0;min-width:0;background:linear-gradient(180deg,#222c38,#1a222c);color:#c3cedb}
   #btnFold .s2{color:var(--ink3);opacity:1}
   #btnCall{
@@ -607,6 +694,7 @@
     border-radius:9px;border:1px solid var(--line3);
     background:linear-gradient(180deg,#212c39,#1a232d);
   }
+  /*svh*/@supports (height:1svh){ .preset,.nudge{font-size:clamp(11.5px,1.65svh,13px)} }
   .preset{flex:1 1 0;min-width:0}
 
   /* 2단계 확정 */
@@ -616,6 +704,7 @@
     border-radius:12px;padding:7px 10px;
   }
   #pendingText{font-size:clamp(11.5px,1.7vh,13.5px);font-weight:800;color:var(--gold);white-space:nowrap}
+  /*svh*/@supports (height:1svh){ #pendingText{font-size:clamp(11.5px,1.7svh,13.5px)} }
   #whyInput{
     flex:1;min-width:120px;padding:0 12px;border-radius:9px;
     border:1px solid #3d3a2b;background:#0f1117;color:var(--ink);font-size:16px;font-family:inherit;
@@ -649,7 +738,8 @@
   .cmsg .term:hover{background:rgba(63,209,138,.16)}
 
   .oldChat{background:#12181f;border:1px solid var(--line);border-radius:9px;padding:5px 11px}
-  .oldChat summary{cursor:pointer;font-size:12px;color:var(--ink3);user-select:none}
+  .oldChat summary{cursor:pointer;font-size:12px;color:var(--ink3);user-select:none;
+    min-height:44px;display:flex;align-items:center}
   .oldChat[open] summary{margin-bottom:7px}
 
   #applyDock{display:none;flex:none}
@@ -785,7 +875,8 @@
     #side.open{transform:translateY(0)}
     #chatHandle{display:flex;align-items:center;gap:8px;flex:none;height:46px;
                 font-size:13px;font-weight:800;color:var(--gold);cursor:pointer;user-select:none}
-    #chatHandle .prev{color:var(--ink3);font-weight:400;font-size:11.5px;
+    #chatHandle .hl{flex:none;white-space:nowrap}
+    #chatHandle .prev{flex:1 1 auto;min-width:0;color:var(--ink3);font-weight:400;font-size:11.5px;
                       overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
     #chatBadge{display:none;margin-left:auto;color:var(--red);font-size:11.5px}
     #chatBadge.show{display:inline}
@@ -796,6 +887,7 @@
     #raiseSlider{display:none}
     #raiseBox{width:100%;justify-content:center}
     #controls{height:clamp(164px,22vh,190px)}
+    /*svh*/@supports (height:1svh){ #controls{height:clamp(164px,22svh,190px)} }
     #pendingBox{flex-wrap:wrap;overflow:visible}
     #pendingText{flex:1 1 100%}
     #whyInput{flex:1 1 100%;min-width:0}
@@ -820,11 +912,18 @@
     #hud,#tableWrap,#controls{padding-left:8px;padding-right:8px}
     .seat .betchip{display:none}
     #seat0 .seatFoot{display:none}   /* 내 마지막 액션은 명찰의 "판 N · 지금 N"과 겹친다 */
+    #seat0 .foldTag{display:inline-block}   /* 알약 줄이 숨으니 이름 옆에 '폴드' */
+    #seat0.folded .ptype{display:none}       /* '(당신)' 자리를 꼬리표에 내준다 (이름 줄이 꺾이지 않게) */
+    #actPreview .aplL{display:none}
+    #actPreview .aplS{display:inline}        /* 폰에서는 짧은 라벨 — 칸이 금액을 다 보여줄 폭을 갖게 */
+    #potLine .potBets{display:none}         /* '(베팅 N 포함)'은 폰 폭에서 카드 줄을 두 줄로 꺾는다 */
+    .opp .lastAct{padding:1px 5px;letter-spacing:-.3px}
     #boardArea{gap:3px 5px}
     #potLine{font-size:clamp(10.5px,1.5vh,12.5px);padding:2px 9px}
+    /*svh*/@supports (height:1svh){ #potLine{font-size:clamp(10.5px,1.5svh,12.5px)} }
     /* 폰: 내 손익 줄은 짧은 표기로 (긴 문구가 자리를 다 먹는다) */
-    #seat0 .rbFull{display:none}
-    #seat0 .rbShort{display:inline}
+    .mymeta .rbFull{display:none}
+    .mymeta .rbShort{display:inline}
     .slotLabel{display:none}
     /* ── 베팅 줄: 프리셋 4개 / −100·금액·+100 두 줄로 ──
        한 줄로 두면 390px 폰에서 자리가 모자라 양끝이 잘린다. */
@@ -838,7 +937,11 @@
     .ctlEnd > button{flex:1 1 calc(50% - 5px);min-width:0;white-space:nowrap}
     /* 폰에서는 "👉 내 차례" 글자를 숨긴다 — 위 초록 배너와 중복이다 */
     #turnHint{display:none}
-    #controls{height:auto;min-height:clamp(160px,25.5vh,190px)}
+    /* 높이는 가장 긴 상태(내 차례: 베팅 줄 2줄 + 행동 버튼)의 내용 높이로 고정한다.
+       상태마다 높이가 다르면 무대(#table)의 높이가 바뀌어 카드 배율이 흔들린다.
+       = 프리셋 44 + 4 + 금액 44 + 행동 줄 패딩 9 + 버튼 + 줄 간격 2개 + 상하 패딩 (+1 여유) */
+    #controls{height:auto;min-height:calc(102px + clamp(46px,7vh,54px) + clamp(4px,.7vh,7px) * 2 + clamp(5px,.9vh,10px) + clamp(7px,1.2vh,14px))}
+    /*svh*/@supports (height:1svh){ #controls{min-height:calc(102px + clamp(46px,7svh,54px) + clamp(4px,.7svh,7px) * 2 + clamp(5px,.9svh,10px) + clamp(7px,1.2svh,14px))} }
     .opp{padding:3px 5px 4px}
     .mine{padding:5px 7px}
   }
@@ -852,6 +955,9 @@
     .dbtn{width:15px;height:15px;font-size:8.5px;line-height:15px}
   }
   @media (max-height:700px){
+    :root{--fsubH:0px}
+    .opp .binfo{grid-template-areas:"nm tp" "stk bet"}   /* 이름 옆에 성향 태그 — 한 줄 아낀다 */
+    .opp .ptype{margin:0}
     .fsub{display:none}
     .gauge{gap:3px}
     #hud{gap:4px}
@@ -863,8 +969,12 @@
   }
   /* 아주 짧은 화면(구형 아이폰 + 주소창·툴바, 약 553px) */
   @media (max-height:580px){
-    #msgRow{min-height:24px}
-    #msg{font-size:11.5px;padding:2px 10px;min-height:22px}
+    :root{--msgFont:11.5px;--msgPad:8px;--ftextLH:calc(clamp(11px,1.6vh,12.5px) * 1.22);--ftLines:1;
+          --ctxH:calc(clamp(10.5px,1.55vh,12px) * 1.25);--wbFont:9.5px;
+          --s0boxH:calc(11px * 1.15 + 12.5px * 1.15 + 9px * 1.15 + 2px)}
+    /*svh*/@supports (height:1svh){ :root{--ftextLH:calc(clamp(11px,1.6svh,12.5px) * 1.22);--ctxH:calc(clamp(10.5px,1.55svh,12px) * 1.25)} }
+    .ftext{-webkit-line-clamp:1}   /* 가격 판정은 위 배지(▲ 가격은 이득 / ▼ 손해)에도 있으므로 한 줄로 */
+    #msg{padding:2px 10px}
     .gauge{padding:4px 8px;gap:2px}
     .ghead .gv{font-size:16px}
     .ftext{line-height:1.22}
@@ -893,8 +1003,8 @@
     #boardArea{padding:2px 6px}
     .mtag{font-size:10.5px;padding:1px 7px}
     .ghead .gv{font-size:15px}
-    .seat .winBadge{font-size:9.5px;padding:0 7px;line-height:1.35}
-    #seat0 .rebuyInfo{display:none}   /* 세션 손익은 넓은 화면에서만 (여기선 카드가 먼저다) */
+    .winBadge{padding:0 7px}
+    .mymeta .rebuyInfo{display:none}   /* 세션 손익은 넓은 화면에서만 (여기선 카드가 먼저다) */
     /* 판정 문구의 괄호 설명을 접어 한 줄로 만든다 (결론 자체는 그대로 보인다) */
     .ftext .note{display:none}
   }
@@ -1167,7 +1277,7 @@
 
 <div id="side">
   <div id="chatHandle">
-    💬 코치
+    <span class="hl">💬 코치</span>
     <span class="prev" id="chatPreview">탭해서 채팅 열기</span>
     <span id="chatBadge">● 새 답변</span>
     <span id="chatArrow">▲</span>
@@ -1583,8 +1693,8 @@ function render(){
   updateReserveBtn();
   const bets = players.reduce((s,p)=>s+p.streetBet,0);
   const collected = potTotal()-bets;
-  document.getElementById('potLine').textContent =
-    '팟: ' + potTotal().toLocaleString() + (bets? ' (베팅 '+bets.toLocaleString()+' 포함)':'');
+  document.getElementById('potLine').innerHTML =
+    '팟: ' + potTotal().toLocaleString() + (bets? '<span class="potBets"> (베팅 '+bets.toLocaleString()+' 포함)</span>':'');
   const boardEl = document.getElementById('board');
   boardEl.innerHTML='';
   const slotNames = ['플랍 ①','플랍 ②','플랍 ③','턴','리버'];
@@ -1614,13 +1724,7 @@ function render(){
     let cardsHtml = '';
     el.innerHTML = '';
     // 명찰(박스)은 컴팩트하게, 카드는 박스 밖 펠트 위에
-    // 승리 배지는 명찰 위 별도 줄
-    if(p.winText){
-      const wb = document.createElement('div');
-      wb.className = 'winBadge' + (p.isWinner ? '' : ' returnBadge');
-      wb.textContent = (p.isWinner ? '🏆 ' : '') + p.winText;
-      el.appendChild(wb);
-    }
+    // 승리 배지는 아래 '상태 줄'(손익 줄과 같은 자리)에 — 자리 높이가 상태마다 변하지 않게
     // 명찰: 아바타를 안에 넣어 세로 높이를 줄인다 (밖에 쌓으면 칸을 넘쳐 보드와 겹침)
     const box = document.createElement('div');
     box.className='box';
@@ -1628,7 +1732,7 @@ function render(){
       '<div class="pod">'+p.name.slice(0,1)+
         (p.seat===state.button?'<span class="dbtn">D</span>':'')+'</div>'+
       '<div class="binfo">'+
-        '<div class="pname">'+p.name+'</div>'+
+        '<div class="pname">'+p.name+(p.folded?' <i class="foldTag">폴드</i>':'')+'</div>'+
         '<div class="ptype">'+p.typeLabel+'</div>'+
         '<div class="pstack">'+p.stack.toLocaleString()+(p.allIn?' <em>올인</em>':'')+'</div>'+
         (p.totalContrib
@@ -1637,18 +1741,14 @@ function render(){
             + '</div>'
           : '')+
       '</div>';
-    if(p.folded){
-      const st = document.createElement('div');
-      st.className='foldStamp'; st.textContent='폴드';
-      box.appendChild(st);
-    }
     el.appendChild(box);
     // 액션 알약 + 깔린 칩을 한 줄에 (줄이 늘면 테이블 밖으로 잘린다)
+    // 접은 사람은 알약 자리에 '폴드' — 카드 위에 도장을 덮지 않는다 (핸드 종료 시 패가 공개되므로)
     const foot = document.createElement('div');
     foot.className = 'seatFoot';
-    if(!p.folded && p.lastAct){
+    if(p.folded || p.lastAct){
       const la = document.createElement('div');
-      la.className='lastAct'; la.textContent = p.lastAct;
+      la.className='lastAct' + (p.folded ? ' b-fold' : ''); la.textContent = p.folded ? '폴드' : p.lastAct;
       foot.appendChild(la);
     }
     const cardsDiv = document.createElement('div');
@@ -1657,9 +1757,6 @@ function render(){
       p.hole.forEach(c=>cardsDiv.appendChild(cardEl(c, !p.isHuman, !showCards)));
     }
     el.appendChild(cardsDiv);
-    const riWrap = document.createElement('div');
-    riWrap.innerHTML = rebuyInfoHtml(p);
-    if(riWrap.firstChild) el.appendChild(riWrap.firstChild);   // 초기 상태면 줄 자체가 없음
     if(p.streetBet){
       const bet = document.createElement('div');
       bet.className='betchip';
@@ -1667,6 +1764,32 @@ function render(){
       foot.appendChild(bet);
     }
     if(foot.childNodes.length) el.appendChild(foot);
+    // 상태 줄: 승리 배지 > 손익 줄 > 빈 줄 — 셋 중 하나가 항상 같은 높이로 들어간다
+    const status = document.createElement('div');
+    status.className = 'statusRow';
+    if(p.winText){
+      const wb = document.createElement('div');
+      wb.className = 'winBadge' + (p.isWinner ? '' : ' returnBadge');
+      // '풀하우스 +13,500' → 금액을 먼저, 족보 이름은 자리가 모자라면 줄인다 (금액은 끝까지 보이게)
+      const mm = p.winText.match(/^(.*?)\s*(\+[\d,]+)$/);
+      const amt = mm ? mm[2] : p.winText, lbl = mm ? mm[1] : '';
+      const esc = t => t.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+      wb.innerHTML = p.isWinner
+        ? '<b class="wbAmt">🏆 '+esc(amt)+'</b>' + (lbl ? '<span class="wbLbl">'+esc(lbl)+'</span>' : '')
+        : (lbl ? '<span class="wbLbl">'+esc(lbl)+'</span>' : '') + '<b class="wbAmt">'+esc(amt)+'</b>';
+      status.appendChild(wb);
+    } else {
+      status.innerHTML = rebuyInfoHtml(p);   // 초기 상태면 빈 줄 (높이는 그대로)
+    }
+    if(p.isHuman){
+      // 내 상태 줄은 오른쪽 꼬리표 칸(.mymeta)의 셋째 줄 — 카드 옆 빈 세로 공간을 쓴다 (무대 높이를 안 먹는다)
+      const meta = document.querySelector('.mymeta');
+      const old = meta && meta.querySelector('.statusRow');
+      if(old) old.remove();
+      if(meta) meta.appendChild(status); else el.appendChild(status);
+    } else {
+      el.appendChild(status);
+    }
   });
   updateEquity();
 }
@@ -3783,8 +3906,12 @@ function hudSituKey(){
   return state.handNo + '|' + state.street + '|' + state.currentBet + '|' + players[0].streetBet;
 }
 function hudFirstLine(text){
-  const line = String(text||'').split('\n').map(s=>s.trim())
-    .filter(s=>s && !/^\(/.test(s) && !/^[🤔⏱↻⌛💾]/.test(s))[0] || '';
+  const raw = String(text||'');
+  // '결론:' 줄이 있으면 그 줄이 한마디다 (선행 분석은 [읽기] 블록이 먼저 온다)
+  const verdict = raw.match(/^(?:최종\s*)?결론\s*[::][^\n]*/m);
+  const line = verdict ? verdict[0].trim()
+    : (raw.split('\n').map(s=>s.trim())
+        .filter(s=>s && !/^\(/.test(s) && !/^[🤔⏱↻⌛💾]/u.test(s))[0] || '');
   return line.length > 110 ? line.slice(0,108) + '…' : line;
 }
 function noteCoachLine(cls, text){
@@ -3856,9 +3983,12 @@ function paintActPreview(){
     // 내 차례엔 금액을 아래 진짜 버튼이 보여준다 → 이 줄은 다음 단계를 안내한다
     box.innerHTML = '';                            // 남은 '코치 추천' 표를 먼저 치운다
     const cm = document.getElementById('confirmMode');
-    box.innerHTML = '<div class="tip">' + ((cm && cm.checked && coachOnline)
+    const consult = !!(cm && cm.checked);
+    box.innerHTML = '<div class="tip">' + (consult && coachOnline
       ? '고른 뒤 <b>이유</b>를 적고 Enter → 코치가 평가해줍니다'
-      : '고르면 바로 실행됩니다 (코치 자동 상의 꺼짐)') + '</div>';
+      : consult
+        ? '코치 서버가 꺼져 있어 고르면 바로 실행됩니다'
+        : '고르면 바로 실행됩니다 (코치 자동 상의 꺼짐)') + '</div>';
     return;
   }
   const toCall = Math.max(0, state.currentBet - me.streetBet);
@@ -3866,7 +3996,7 @@ function paintActPreview(){
   const minTo = Math.min(state.currentBet + state.minRaiseSize, me.streetBet + me.stack);
   const rec = hudRecommend();
   const pin = '<span class="rec-pin">코치 추천</span>';
-  let html = '<span class="apl">내 차례가 오면</span>'
+  let html = '<span class="apl"><span class="aplL">내 차례가 오면</span><span class="aplS">내 차례엔</span></span>'
     + '<div class="act a-fold">' + (rec==='fold'?pin:'') + hudActLabel('폴드','0원') + '</div>'
     + '<div class="act a-call">' + (rec==='call'?pin:'')
       + hudActLabel(toCall === 0 ? '체크' : (toCall >= me.stack ? '올인 콜' : '콜'),
