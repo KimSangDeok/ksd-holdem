@@ -21,7 +21,8 @@
     --panel:#141a22; --panel2:#1b2430; --sunken:#0c1116;
     --ink:#eef3f8; --ink2:#a4b1bf; --ink3:#7b8794;
     --gold:#ffd270; --gold2:#e0a534;
-    --green:#3fc27c; --green2:#1f8a53;
+    --accent:#4c9cf2; --accent2:#2563b8;   /* 강조색 (예전 초록 → 파랑, 2026-10-19 사용자 요청) */
+    --good:#7ee2a8;                          /* 이득·승리 같은 뜻을 가진 작은 글자에만 */
     --red:#ff8a7a;
     --pad:clamp(6px,1.1vh,12px);
   }
@@ -63,9 +64,9 @@
   /* strong = 강조만 (b 와 달리 용어집 자동등록 대상이 아님) */
   #ref strong{color:var(--gold);display:inline-block;margin-top:6px}
   #ref strong:first-child{margin-top:0}
-  #ref b.refFlash{background:#2c4a38;border-radius:4px;box-shadow:0 0 0 3px #2c4a38}
+  #ref b.refFlash{background:#2c3f5c;border-radius:4px;box-shadow:0 0 0 3px #2c3f5c}
   #ref .rNote{color:var(--ink3);font-size:12px;margin-top:5px}
-  #equityVal{font-size:32px;font-weight:800;color:var(--green);line-height:1.1}
+  #equityVal{font-size:32px;font-weight:800;color:var(--accent);line-height:1.1}
   @media (max-width:780px){ #ref{flex-direction:column;gap:0} }
 
   /* ───────── 게임 영역 ───────── */
@@ -97,14 +98,14 @@
   }
   #msg:empty{display:none}
   #msg.myturn{
-    color:#04220f;border:none;
-    background:linear-gradient(180deg,#54d98d,#2a9c60);
-    box-shadow:0 6px 24px rgba(63,194,124,.4), inset 0 1px 0 rgba(255,255,255,.4);
+    color:#fff;border:none;
+    background:linear-gradient(180deg,#5aa8f7,#2a6cc4);
+    box-shadow:0 6px 24px rgba(76,156,242,.4), inset 0 1px 0 rgba(255,255,255,.4);
     animation:myturnPulse 1.5s ease-in-out infinite;
   }
   @keyframes myturnPulse{
-    0%,100%{box-shadow:0 6px 20px rgba(63,194,124,.32), inset 0 1px 0 rgba(255,255,255,.4)}
-    50%    {box-shadow:0 6px 34px rgba(63,194,124,.62), inset 0 1px 0 rgba(255,255,255,.4)}
+    0%,100%{box-shadow:0 6px 20px rgba(76,156,242,.32), inset 0 1px 0 rgba(255,255,255,.4)}
+    50%    {box-shadow:0 6px 34px rgba(76,156,242,.62), inset 0 1px 0 rgba(255,255,255,.4)}
   }
 
   #tableWrap{flex:1;min-height:220px;position:relative;display:flex;
@@ -117,7 +118,7 @@
     height:min(100%,600px);
     border-radius:clamp(90px,26vh,240px)/clamp(60px,17vh,160px);
     background:radial-gradient(120% 96% at 50% 24%,
-      #21855a 0%, #156a45 32%, #0e4e32 60%, #0a3a26 82%, #07291c 100%);
+      #24609c 0%, #1a4b7d 32%, #12385f 60%, #0c2946 82%, #081c32 100%);
     border:clamp(8px,1.6vh,14px) solid #171c22;
     outline:1px solid #333d49;
     box-shadow:inset 0 0 100px rgba(0,0,0,.55),
@@ -145,7 +146,7 @@
   #boardArea{grid-area:board;display:flex;flex-direction:column;align-items:center;min-width:0;z-index:2}
   #board{display:flex;gap:clamp(3px,.6vw,8px);justify-content:center}
   .slotWrap{display:flex;flex-direction:column;align-items:center}
-  .slotLabel{font-size:clamp(8.5px,1.3vh,11px);color:rgba(210,235,215,.5);margin-top:3px}
+  .slotLabel{font-size:clamp(8.5px,1.3vh,11px);color:rgba(215,226,240,.5);margin-top:3px}
   #potLine{
     margin-top:clamp(5px,1.1vh,11px);
     font-size:clamp(13px,2.1vh,17px);font-weight:800;color:#fff;
@@ -171,7 +172,7 @@
   .card .suit{font-size:clamp(17px,3.6vh,33px);opacity:.9;line-height:1}
   .card.red{color:#d02a2a}
   .card.back{
-    background:repeating-linear-gradient(45deg,#31518f,#31518f 4px,#274276 4px,#274276 8px);
+    background:repeating-linear-gradient(45deg,#9a2f3a,#9a2f3a 4px,#7c2430 4px,#7c2430 8px);
     border:1.5px solid #dfe6ef;color:transparent;
   }
   .card.hl{box-shadow:0 0 0 3px var(--gold), 0 0 20px rgba(255,210,112,.85);transform:translateY(-4px);z-index:4}
@@ -210,7 +211,7 @@
   .seat.acting .pod{border-color:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.2),0 6px 18px rgba(0,0,0,.65)}
   .seat.acting .pod::after{
     content:'';position:absolute;inset:-7px;border-radius:50%;
-    background:conic-gradient(var(--green) 0 70%, rgba(255,255,255,.10) 70% 100%);
+    background:conic-gradient(var(--gold) 0 70%, rgba(255,255,255,.10) 70% 100%);
     -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 3px),#000 0);
             mask:radial-gradient(farthest-side,transparent calc(100% - 3px),#000 0);
     animation:spin 9s linear infinite;
@@ -238,20 +239,20 @@
   .binfo{min-width:0;text-align:left;line-height:1.25}
   .seat .pstack em{font-style:normal;font-size:.72em;color:var(--red);margin-left:3px}
   .seat.acting .box{border-color:rgba(255,255,255,.5)}
-  .seat.winner .box{border-color:var(--green);box-shadow:0 0 18px rgba(63,194,124,.5)}
+  .seat.winner .box{border-color:var(--gold);box-shadow:0 0 18px rgba(255,210,112,.45)}
   .seat.folded .box{border-color:rgba(255,120,110,.3)}
   .seat .pname,.seat .ptype,.seat .pstack,.seat .lastAct,
   .seat .contribLine,.rebuyInfo{overflow:hidden;text-overflow:ellipsis;max-width:100%;white-space:nowrap}
   .seat .pname{font-weight:800;font-size:clamp(11px,1.8vh,14px);line-height:1.3}
-  .seat .ptype{font-size:clamp(9px,1.4vh,11.5px);color:#8fa89a;line-height:1.3}
+  .seat .ptype{font-size:clamp(9px,1.4vh,11.5px);color:#91a0b0;line-height:1.3}
   .seat .pstack{font-size:clamp(13px,2.2vh,17px);font-weight:800;color:var(--gold);
                 font-variant-numeric:tabular-nums;line-height:1.35}
-  .seat .contribLine{font-size:clamp(9px,1.4vh,11px);color:#93a89b;font-weight:700}
-  .seat .contribLine b{color:#cfe0d4;font-weight:800}
-  .seat .contribLine .nowBet{display:none;color:var(--green)}
+  .seat .contribLine{font-size:clamp(9px,1.4vh,11px);color:#97a5b4;font-weight:700}
+  .seat .contribLine b{color:#d3dde8;font-weight:800}
+  .seat .contribLine .nowBet{display:none;color:var(--accent)}
   .rebuyInfo{font-size:clamp(8.5px,1.3vh,11px);color:#8496a4;font-weight:700;
              font-variant-numeric:tabular-nums}
-  .rebuyInfo .pl-p{color:var(--green);font-weight:800}
+  .rebuyInfo .pl-p{color:var(--good);font-weight:800}
   .rebuyInfo .pl-m{color:var(--red);font-weight:800}
   .rebuyInfo .rbShort{display:none}
   .seat:not(#seat0) .rbFull{display:none}
@@ -342,8 +343,8 @@
   /* 한 칸 = 5% = 20판 중 1판 */
   .fbar{position:relative;display:flex;gap:2px;height:11px;flex:none}
   .fcell{flex:1;min-width:0;border-radius:2px;background:rgba(255,255,255,.07)}
-  .fcell.even{background:linear-gradient(90deg,var(--green2) var(--f,100%),rgba(255,255,255,.07) 0)}
-  .fcell.gain{background:linear-gradient(90deg,var(--green) var(--f,100%),rgba(255,255,255,.07) 0)}
+  .fcell.even{background:linear-gradient(90deg,var(--accent2) var(--f,100%),rgba(255,255,255,.07) 0)}
+  .fcell.gain{background:linear-gradient(90deg,var(--accent) var(--f,100%),rgba(255,255,255,.07) 0)}
   .fneed{position:absolute;top:-3px;bottom:-3px;width:2px;margin-left:-1px;
          background:#fff;border-radius:1px;box-shadow:0 0 0 1px rgba(0,0,0,.55)}
   /* 판정 문구까지 다 보여야 하므로 줄바꿈 허용 — 잘리면 초보가 결론을 못 읽는다 */
@@ -360,9 +361,9 @@
             padding:4px 11px;border:1px solid var(--line);white-space:nowrap}
   #preState:empty{display:none}
   #preState.work{color:#ffd270;border-color:rgba(255,210,112,.4);background:rgba(255,210,112,.10)}
-  #preState.ready{color:#7ee2a8;border-color:rgba(126,226,168,.45);background:rgba(126,226,168,.12)}
+  #preState.ready{color:#9cc8ff;border-color:rgba(156,200,255,.45);background:rgba(156,200,255,.12)}
   #preState.fail{color:var(--red);border-color:rgba(255,138,122,.4);background:rgba(255,138,122,.10)}
-  #oddsHint .good{color:#7ee2a8;font-weight:800}
+  #oddsHint .good{color:var(--good);font-weight:800}
   #oddsHint .bad{color:var(--red);font-weight:800}
   #btnReserveFold{margin-left:auto;font-size:12px;padding:6px 12px}
   #btnReserveFold.on{background:linear-gradient(180deg,#a3453a,#7a2f27);border-color:#c0604f;color:#fff}
@@ -370,9 +371,9 @@
   /* 주요 행동 버튼 — 입체 */
   #btnFold{background:linear-gradient(180deg,#3a444f,#252c35);color:#dfe6ee;
            padding:clamp(10px,1.8vh,15px) clamp(18px,2.4vw,30px);font-size:clamp(13px,2vh,15.5px)}
-  #btnCall{background:linear-gradient(180deg,#3fc27c,#1f8a53);color:#04220f;border-color:#2c9a60;
+  #btnCall{background:linear-gradient(180deg,#4c9cf2,#2563b8);color:#fff;border-color:#3a7fd6;
            padding:clamp(10px,1.8vh,15px) clamp(18px,2.4vw,30px);font-size:clamp(13px,2vh,15.5px);
-           box-shadow:0 6px 20px rgba(63,194,124,.32), inset 0 1px 0 rgba(255,255,255,.34)}
+           box-shadow:0 6px 20px rgba(76,156,242,.32), inset 0 1px 0 rgba(255,255,255,.34)}
   #btnRaise{background:linear-gradient(180deg,#ffd270,#e0a534);color:#2a1c00;border-color:#e6b249;
             padding:clamp(10px,1.8vh,15px) clamp(16px,2.2vw,26px);font-size:clamp(13px,2vh,15.5px);
             box-shadow:0 6px 20px rgba(224,165,52,.3), inset 0 1px 0 rgba(255,255,255,.4)}
@@ -407,7 +408,7 @@
     border:1px solid #3d3a2b;background:#0f1117;color:var(--ink);font-size:16px;font-family:inherit;
   }
   #whyInput::placeholder{color:var(--ink3)}
-  #btnConfirm{background:linear-gradient(180deg,#3fc27c,#1f8a53);color:#04220f;border-color:#2c9a60}
+  #btnConfirm{background:linear-gradient(180deg,#4c9cf2,#2563b8);color:#fff;border-color:#3a7fd6}
   #btnRethink{background:linear-gradient(180deg,#7a4a30,#5a3522);color:#ffe0c8;border-color:#8a5638}
 
   /* ───────── 코치 패널 ───────── */
@@ -424,15 +425,15 @@
         white-space:pre-wrap;word-break:break-word}
   .cmsg.user{background:#212b37;color:#c9d5e2;align-self:flex-end;max-width:92%}
   .cmsg.coach{background:linear-gradient(180deg,#18202a,#141b23);border:1px solid #26313d;
-              border-left:3px solid var(--green);color:#c9d5e2;animation:coachArrive .25s ease-out}
+              border-left:3px solid var(--accent);color:#c9d5e2;animation:coachArrive .25s ease-out}
   .cmsg.sys{background:#1c222b;color:#93a1b1;font-size:12.5px}
   /* 게임이 즉시 계산해 내놓는 판정 — 코치 답변과 구분되게 */
   .cmsg.local{background:#16202a;border:1px solid #2b4152;border-left:3px solid #4c9fd8;color:#cfe0ee}
   @keyframes coachArrive{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
   .cmsg .verdict{display:block;font-weight:800;color:var(--gold);font-size:15.5px;
                  margin-bottom:6px;padding-bottom:5px;border-bottom:1px dashed #3c4552}
-  .cmsg .term{text-decoration:none;border-bottom:1.5px dotted var(--green);color:#7ee2a8;cursor:help}
-  .cmsg .term:hover{background:rgba(63,194,124,.16)}
+  .cmsg .term{text-decoration:none;border-bottom:1.5px dotted var(--accent);color:#9cc8ff;cursor:help}
+  .cmsg .term:hover{background:rgba(76,156,242,.16)}
 
   .oldChat{background:#12181f;border:1px solid var(--line);border-radius:9px;padding:5px 11px}
   .oldChat summary{cursor:pointer;font-size:12px;color:var(--ink3);user-select:none}
@@ -442,9 +443,9 @@
   #applyDock.on{display:block}
   .applyRow{margin:2px 0 8px}
   .applyBtn{
-    width:100%;background:linear-gradient(180deg,#3fc27c,#1f8a53);color:#04220f;
-    border:1px solid #2c9a60;border-radius:12px;padding:13px;font-size:14px;font-weight:800;
-    box-shadow:0 6px 18px rgba(63,194,124,.3), inset 0 1px 0 rgba(255,255,255,.3);
+    width:100%;background:linear-gradient(180deg,#4c9cf2,#2563b8);color:#fff;
+    border:1px solid #3a7fd6;border-radius:12px;padding:13px;font-size:14px;font-weight:800;
+    box-shadow:0 6px 18px rgba(76,156,242,.3), inset 0 1px 0 rgba(255,255,255,.3);
   }
   .applyBtn:disabled{opacity:.35}
 
@@ -474,14 +475,14 @@
   #logBox[open] summary .hint{display:none}
   #logResize{flex:none;height:8px;cursor:row-resize;display:flex;align-items:center;justify-content:center}
   #logResize::after{content:'';width:46px;height:3px;border-radius:2px;background:#2f3945}
-  #logResize:hover::after,#logResize.drag::after{background:var(--green)}
+  #logResize:hover::after,#logResize.drag::after{background:var(--accent)}
   #log{
     height:150px;overflow-y:auto;padding:2px 1px 10px;
     font-size:12.5px;line-height:1.85;color:#98a6b4;
   }
   #log .me{color:var(--gold);font-weight:800}
   #log .street{color:#dfe6ee;font-weight:800;margin-top:4px}
-  #log .win{color:#7ee2a8;font-weight:800}
+  #log .win{color:var(--good);font-weight:800}
   #log .info{color:var(--ink3)}
 
   #sideBtns{flex:none}
@@ -489,7 +490,7 @@
   #toolsBox summary:hover{color:var(--ink)}
   .toolBtns{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
   .toolBtns button{font-size:12px;padding:8px 11px}
-  #copyToast{font-size:12px;color:#7ee2a8;margin-top:5px}
+  #copyToast{font-size:12px;color:#9cc8ff;margin-top:5px}
 
   /* ───────── 오버레이 ───────── */
   /* 가이드 패널은 폰에서 화면의 94%를 덮어 상단바의 [가이드 닫기] 버튼까지 가린다.
@@ -1579,7 +1580,7 @@ function animatePotToWinner(){
   const bRect = document.getElementById('boardArea').getBoundingClientRect();
   const startX = bRect.left + bRect.width/2 - tRect.left;
   const startY = bRect.top + bRect.height/2 - tRect.top;
-  const colors = ['#c0392b','#2e86de','#27ae60','#2b2b2b'];
+  const colors = ['#c0392b','#2e86de','#7d4bb5','#2b2b2b'];
   winners.forEach(w=>{
     const sRect = document.getElementById('seat'+w.seat).getBoundingClientRect();
     const endX = sRect.left + sRect.width/2 - tRect.left;
@@ -1613,7 +1614,7 @@ function chipStackEl(amount){
   const wrap = document.createElement('div');
   wrap.style.display = 'flex';
   wrap.style.alignItems = 'center';
-  const denoms = [[5000,'#2b2b2b'],[1000,'#27ae60'],[500,'#2e86de'],[100,'#c0392b']];
+  const denoms = [[5000,'#2b2b2b'],[1000,'#7d4bb5'],[500,'#2e86de'],[100,'#c0392b']];
   const chips = [];
   let rest = amount;
   denoms.forEach(([v,c])=>{
@@ -3289,7 +3290,7 @@ async function pingCoach(){
     if((await r.json()).ok){
       coachOnline = true;
       coachState.textContent = '(연결됨 ✅)';
-      coachState.style.color = '#8fd08f';
+      coachState.style.color = '#9cc8ff';
       return true;
     }
   }catch(e){}
