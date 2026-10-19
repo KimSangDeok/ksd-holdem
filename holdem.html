@@ -731,6 +731,87 @@
     .ftext .note{display:none}
   }
 
+
+  /* =====================================================================
+     참고 앱 기준 배치 (2026-10-19)
+     근거: 앱스토어 실제 스크린샷 — PokerStars(평점 6.5만), PokerStars Play(2.4만),
+     GGPoker, Poker Face(6.3만). 세로 화면 넷이 공통으로 하는 것만 옮겼다.
+       ① 행동 버튼은 맨 아래 한 줄, 같은 폭 (Fold | Check | Bet 20)
+       ② 화면 위 큰 안내 띠가 없다 → 안내는 테이블 가운데 글자로
+       ③ 팟 금액은 보드 위
+     ===================================================================== */
+  /* 보드 칸 폭을 가운데 열로 묶는다 — 안 묶으면 줄바꿈 없는 안내 글자 길이만큼 칸이 넓어져 옆 자리 카드와 겹친다(실측 360px) */
+  #boardArea{width:100%}
+  #msgRow{min-height:0;padding:0;margin-top:clamp(3px,.6vh,6px);width:100%;
+          /* 글자가 있든 없든 같은 높이(한 줄) — 글자 길이에 따라 보드가 흔들리지 않게.
+             두 줄을 잡으면 넓은 화면에서도 내 카드와 닿았다(실측 1366×768) */
+          height:calc(var(--msgFs) * 1.3);align-items:flex-start;--msgFs:clamp(11.5px,1.65vh,13.5px)}
+  #msg{font-size:var(--msgFs);line-height:1.3;font-weight:700;color:rgba(232,243,236,.86);
+       background:none;border:none;box-shadow:none;padding:0 4px;border-radius:0;
+       display:block;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;max-width:100%}
+  #msg:empty{display:block}
+  #msg.myturn{color:var(--gold);background:none;box-shadow:none;animation:none}
+  #potLine{margin:0 0 clamp(3px,.6vh,6px);box-shadow:none;background:rgba(0,0,0,.38);
+           font-size:clamp(12px,1.8vh,15px);padding:clamp(2px,.4vh,4px) clamp(9px,1.2vw,14px)}
+  /* 넓은 화면은 위쪽 자리의 베팅 칩이 보드 바로 위에 놓인다 → 팟을 위로 올리면 칩·카드와 겹친다(실측).
+     폰은 베팅 칩을 숨기므로(≤620px) 팟을 보드 위로, 넓은 화면은 예전처럼 보드 아래로 둔다. */
+  @media (min-width:621px){
+    #potLine{order:2;margin:clamp(5px,1.1vh,11px) 0 0}
+    #msgRow{order:3}
+  }
+
+  .ctlMain{max-width:560px;gap:clamp(6px,.8vw,10px)}
+  #controls .ctlMain > button{flex:1 1 0;min-width:0;min-height:52px;padding:5px 4px;
+                    display:flex;flex-direction:column;align-items:center;justify-content:center;
+                    white-space:nowrap;overflow:hidden}
+  .ctlMain .bt{display:block;font-size:clamp(14px,2vh,16px);font-weight:800;line-height:1.15}
+  .ctlMain .ba{display:block;font-size:clamp(11.5px,1.6vh,13px);font-weight:800;line-height:1.15;
+               opacity:.82;font-variant-numeric:tabular-nums;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+  #btnFold:disabled{opacity:.38}
+
+  @media (max-width:620px){
+    #btnFold,#btnCall,#btnRaise{padding:5px 4px}
+    /* 베팅 크기 줄: 참고 앱(PokerStars)처럼 한 줄. 레이즈 버튼이 아래 행동 줄로 내려가면서
+       자리가 생겼다 — 프리셋 4 + −100·금액·+100 이 360px 폭에서도 각 44px 이상으로 들어간다 */
+    #raiseBox{flex-wrap:nowrap;justify-content:space-between;gap:3px;padding:3px 4px}
+    #raiseBox .preset,#raiseBox .nudge{flex:1 1 0;min-width:44px;padding:6px 2px;font-size:12px}
+    #raiseBox #raiseAmt{flex:0 0 66px;width:66px;min-width:0;padding:6px 4px;text-align:center}
+    /* 테이블 가운데 칸이 짧다(실측 375×553 72px, 360×740 85px). 팟·보드·안내 두 줄이 다 들어가지 않아
+       위 자리 알약·내 카드와 겹쳤다 → 폰에서는 안내 글자를 작게, 팟 알약을 낮게.
+       누가 이겼는지는 자리의 승리 배지에도 나온다. */
+    #msgRow{--msgFs:12px;margin-top:2px}
+    #potLine{font-size:12px;padding:1px 9px;margin:0 0 2px}
+    /* 서랍 손잡이 '💬 코치'가 미리보기 문장에 밀려 '코 / 치' 두 줄로 꺾이던 것 (기존 결함) */
+    #chatHandle{white-space:nowrap}
+    #chatHandle .prev{flex:1 1 auto;min-width:0}
+    #chatBadge{flex:none}
+    /* 컨트롤 높이: 상태(상대 차례·내 차례·확정 대기·핸드 종료)가 바뀌어도 테이블이 움직이지 않게
+       가장 높은 상태(확정 대기)를 덮는 최소 높이를 준다. 헤드리스 크롬 실측 최대:
+       390×844 231px, 390×664 203px, 360×740 245px, 375×553 180px.
+       폭 360대는 확정 바가 한 줄 더 꺾여 더 높다 → 폭으로 나눠 잡는다. */
+    #controls{height:auto;min-height:clamp(182px,31vh,232px)}
+  }
+  @media (max-width:379px){
+    #controls{min-height:clamp(182px,33.2vh,246px)}
+  }
+  /* 세로가 아주 짧은 폰(주소창·툴바가 다 뜬 구형 아이폰, 약 553px): 가운데 칸이 46px뿐이라
+     팟·보드·안내를 세로로 쌓으면 위아래 자리와 겹친다 → 보드 아래 한 줄에 팟과 안내를 나란히 */
+  @media (max-width:620px) and (max-height:600px){
+    #boardArea{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:6px;align-items:center;
+               grid-template-areas:"board board" "pot msg";justify-items:center}
+    #board{grid-area:board}
+    #potLine{grid-area:pot;margin:2px 0 0;padding:0 7px;font-size:11.5px;line-height:1.35}
+    #msgRow{grid-area:msg;margin-top:2px;justify-self:start;width:100%}
+    #msg{text-align:left}
+  }
+  /* 950px 이하 넓은 화면(태블릿)과 데스크톱도 고정 높이 대신 최소 높이 — 행동 버튼 줄이 생겨
+     내용이 커졌다(실측 900×750 확정 대기 226px, 1366×768 내 차례 205px). 고정 높이면 아래가 잘린다. */
+  @media (min-width:951px){
+    #controls{height:auto;min-height:clamp(208px,27vh,230px)}
+  }
+  @media (min-width:621px) and (max-width:950px){
+    #controls{height:auto;min-height:clamp(228px,30.5vh,240px)}
+  }
 </style>
 </head>
 <body>
@@ -911,13 +992,14 @@
   </div>
 
   <!-- 안내 배너: 테이블 밖에 절대배치하면 화면이 납작할 때 잘리므로 정상 흐름의 한 줄로 -->
-  <div id="msgRow"><div id="msg"></div></div>
 
   <div id="tableWrap">
     <div id="table">
       <div id="boardArea">
-        <div id="board"></div>
         <div id="potLine">팟: 0</div>
+        <div id="board"></div>
+        <!-- 안내 문구: 참고 앱들처럼 화면 위 띠가 아니라 테이블 가운데에 글자로 -->
+        <div id="msgRow"><div id="msg"></div></div>
       </div>
       <div class="seat" id="seat1"></div>
       <div class="seat" id="seat2"></div>
@@ -933,10 +1015,6 @@
       <span id="preState"></span>
       <button id="btnReserveFold" style="display:none">🚫 폴드 예약</button>
     </div>
-    <div class="ctlRow ctlMain">
-      <button id="btnFold">폴드</button>
-      <button id="btnCall">콜</button>
-    </div>
     <div class="ctlRow" id="raiseBox">
       <button class="preset" data-p="min">최소</button>
       <button class="preset" data-p="half">½팟</button>
@@ -946,6 +1024,11 @@
       <button class="nudge" id="btnMinus">−100</button>
       <input type="number" id="raiseAmt" step="100">
       <button class="nudge" id="btnPlus">+100</button>
+    </div>
+    <!-- 행동 버튼: 참고 앱 4개 모두 맨 아래 한 줄, 같은 폭 -->
+    <div class="ctlRow ctlMain">
+      <button id="btnFold">폴드</button>
+      <button id="btnCall">콜</button>
       <button id="btnRaise">레이즈</button>
     </div>
     <div class="ctlRow" id="pendingBox">
@@ -2268,8 +2351,9 @@ function showControls(){
   }
   turnHint.textContent='👉 내 차례';
   btnFold.disabled = toCall===0;
-  btnCall.textContent = toCall===0 ? '체크' :
-    (toCall>=me.stack ? '올인 콜 ('+me.stack+')' : '콜 '+toCall);
+  btnCall.innerHTML = toCall===0 ? '<span class="bt">체크</span>' :
+    (toCall>=me.stack ? '<span class="bt">올인 콜</span><span class="ba">'+me.stack.toLocaleString()+'</span>'
+                      : '<span class="bt">콜</span><span class="ba">'+toCall.toLocaleString()+'</span>');
 
   const minTo = Math.min(state.currentBet + state.minRaiseSize, me.streetBet+me.stack);
   const maxTo = me.streetBet + me.stack;
@@ -2277,14 +2361,15 @@ function showControls(){
     raiseBox.style.display='flex';
     slider.min=minTo; slider.max=maxTo; slider.step=100; slider.value=minTo;
     amtInput.min=minTo; amtInput.max=maxTo; amtInput.value=minTo;
+    btnRaise.style.display='';
     updateRaiseBtn();
-  } else raiseBox.style.display='none';
+  } else { raiseBox.style.display='none'; btnRaise.style.display='none'; }
 }
 function updateRaiseBtn(){
   const me=players[0];
   const v = +amtInput.value || +slider.value;
-  btnRaise.textContent = (v>=me.streetBet+me.stack?'올인 ':'') +
-    (state.currentBet>0?'레이즈 → ':'벳 ') + v.toLocaleString();
+  btnRaise.innerHTML = '<span class="bt">' + (v>=me.streetBet+me.stack?'올인':(state.currentBet>0?'레이즈':'벳')) + '</span>' +
+    '<span class="ba">' + (state.currentBet>0?'→ ':'') + v.toLocaleString() + '</span>';
 }
 slider.oninput=()=>{ amtInput.value=slider.value; updateRaiseBtn(); };
 // 100원 단위 업/다운 버튼
