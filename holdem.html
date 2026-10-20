@@ -2834,18 +2834,30 @@ function parseVerdictAction(reply){
   const me = players[0];
   const toCall = state.currentBet - me.streetBet;
   const maxTo = me.streetBet + me.stack;
-  if(/폴드/.test(s)) return {type:'fold', target:0};
-  if(/올인/.test(s)) return {type:'raise', target:maxTo};
-  if(/레이즈|벳/.test(s)){
-    const mm = s.replace(/[,\s]/g,'').match(/(\d{3,})/);
+  // 결론 줄에서 '맨 먼저 나온' 행동을 쓴다. 예전엔 폴드→올인→레이즈 순서로 단어가 '있기만 하면' 골라서
+  // '결론: 체크, 상대가 벳하면 폴드'가 폴드로, '올인은 과함, 콜'이 올인으로 실행됐다(점검에서 재현).
+  // 바로 뒤에 부정('은 과함', '말고', '금지' 등)이 붙은 행동은 건너뛴다.
+  const NEG = /^\s*(?:은|는|도|이나|보다)?\s*(?:과함|과하|과해|말고|금지|하지\s*마|하면\s*안|안\s*돼|X|✗|아님|아니)/;
+  const re = /(폴드|올인|레이즈|벳|체크|콜)/g;
+  let hit = null, mm;
+  while((mm = re.exec(s))){
+    if(NEG.test(s.slice(mm.index + mm[1].length, mm.index + mm[1].length + 8))) continue;
+    hit = mm; break;
+  }
+  if(!hit) return null;
+  const w = hit[1];
+  if(w === '폴드') return toCall===0 ? {type:'check', target:0} : {type:'fold', target:0};   // 공짜 체크가 되는데 접는 일은 없다
+  if(w === '올인') return {type:'raise', target:maxTo};
+  if(w === '레이즈' || w === '벳'){
+    // 금액은 그 행동 단어 '뒤에' 나온 숫자만 (앞의 '팟 300' 같은 숫자를 금액으로 착각하지 않게)
+    const after = s.slice(hit.index).replace(/[,\s]/g,'');
+    const am = after.match(/(\d{3,})/);
     const minTo = Math.min(state.currentBet + state.minRaiseSize, maxTo);
-    let amt = mm ? +mm[1] : minTo;
+    let amt = am ? +am[1] : minTo;
     amt = Math.max(minTo, Math.min(maxTo, amt));
     return {type:'raise', target:amt};
   }
-  if(/체크/.test(s)) return toCall===0 ? {type:'check', target:0} : {type:'call', target:0};
-  if(/콜/.test(s))  return toCall===0 ? {type:'check', target:0} : {type:'call', target:0};
-  return null;
+  return toCall===0 ? {type:'check', target:0} : {type:'call', target:0};   // 체크·콜
 }
 
 // "코치 결론대로 실행" 버튼을 고정 슬롯(채팅 입력창 위)에 표시
