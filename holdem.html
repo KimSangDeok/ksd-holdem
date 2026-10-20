@@ -813,6 +813,35 @@
   @media (min-width:621px) and (max-width:950px){
     #controls{height:auto;min-height:clamp(228px,30.5vh,240px)}
   }
+
+  /* =====================================================================
+     참고 앱 기준 2차 (2026-10-20) — 같은 스크린샷 4장에서 우리와 다른 네 가지
+       ① 상대 이름표는 이름·칩 2줄 (우리: 4줄 — 이름/스택/판 N·지금 N/충전 N회)
+       ② 베팅 금액은 자리 앞 테이블 위에 칩+숫자 (우리: 이름표 안 글자)
+       ③ 팟은 숫자만 (우리: '팟: 300 (베팅 300 포함)')
+       ④ 내 카드는 크게, 이름표 위에 걸쳐서 (GGPoker·Poker Face)
+     ===================================================================== */
+  .seat .contribLine{display:none!important}
+  .seat:not(#seat0) .rebuyInfo{display:none}
+  .seat .betchip{display:flex!important}
+  .seat .betchip .chip:nth-child(n+4){display:none}     /* 칩은 3개까지만 그리고 금액은 숫자로 */
+  .seat:not(#seat0) .seatFoot .lastAct{flex:0 1 auto;min-width:0}
+  #seat0 .winBadge{order:2}                               /* 내 승리 배지는 이름표 아래 — 카드가 이름표에 걸치며 배지를 덮었다(실측) */
+  @media (max-width:620px){
+    #seat0 .seatFoot{order:-2}                            /* 폰: 내 베팅 칩은 카드 위(가운데 쪽). 넓은 화면은 안내 글자와 닿아서 아래 그대로 */
+  }
+  #seat0{--myOverlap:clamp(8px,1.4vh,13px)}
+  #seat0 .cards{position:relative;z-index:4;margin-bottom:calc(var(--myOverlap) * -1)}
+  #seat0 .box{padding-top:calc(var(--myOverlap) + 3px)}
+  @media (max-width:620px){
+    #seat0 .cards .card{width:clamp(39px,7.4vh,55px);height:clamp(54px,10.2vh,76px)}
+  }
+  @media (max-width:620px) and (max-height:700px){
+    #seat0 .cards .card{width:clamp(34px,6.4vh,48px);height:clamp(47px,8.9vh,66px)}
+  }
+  @media (max-width:620px) and (max-height:580px){
+    #seat0 .cards .card{width:clamp(30px,5.7vh,42px);height:clamp(42px,7.9vh,59px)}
+  }
 </style>
 </head>
 <body>
@@ -1466,8 +1495,9 @@ function render(){
   updateReserveBtn();
   const bets = players.reduce((s,p)=>s+p.streetBet,0);
   const collected = potTotal()-bets;
-  document.getElementById('potLine').textContent =
-    '팟: ' + potTotal().toLocaleString() + (bets? ' (베팅 '+bets.toLocaleString()+' 포함)':'');
+  // 참고 앱처럼 숫자만 (베팅은 자리 앞 칩으로 보인다). 핸드가 끝나 칩이 승자에게 가면 0 대신 이번 판 팟을 남긴다
+  const shownPot = (state.phase==='done' && state.lastPot) ? state.lastPot : potTotal();
+  document.getElementById('potLine').textContent = '팟 ' + shownPot.toLocaleString();
   const boardEl = document.getElementById('board');
   boardEl.innerHTML='';
   const slotNames = ['플랍 ①','플랍 ②','플랍 ③','턴','리버'];
@@ -1712,6 +1742,7 @@ function startHand(){
   state.history = [];
 
   state.resultMsg = '';
+  state.lastPot = 0;
   state.hlCards = new Set();
   players.forEach(p=>{
     p.hole=[]; p.folded=false; p.allIn=false; p.revealed=false; p.foldInfo=null; p.isWinner=false; p.winText='';
@@ -1932,6 +1963,7 @@ function winByFold(){
   w.stack += amt;
   w.isWinner = true;
   w.winText = '+'+amt.toLocaleString();   // 전원 폴드 승리 (족보 없음)
+  state.lastPot = potTotal();
   players.forEach(p=>p.totalContrib=0);
   state.resultMsg = '🏆 '+w.name+' 승리 — 전원 폴드 (+'+amt.toLocaleString()+')';
   logHist('🏆 '+w.name+' 승리! (모두 폴드) +'+amt,'win');
@@ -1998,6 +2030,7 @@ function showdown(){
     }
   });
   state.resultMsg = parts.length ? ('🏆 '+parts.join(' / ')) : '결과 없음';
+  state.lastPot = potTotal();
   players.forEach(p=>p.totalContrib=0);
   finishHand();
 }
