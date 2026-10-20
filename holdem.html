@@ -2046,13 +2046,15 @@ let handsDone = 0;
 const PROFILE_EVERY = 10; // 10판마다 프로필 자동 갱신
 
 // 누적 판수를 DB에서 불러오기 (새로고침/기기 변경에도 이어짐)
-(async ()=>{
+// setTimeout 0: DB_URL 은 이 파일 아래쪽 const 라서, 바로 부르면 선언 전 접근(오류)으로 조용히 실패했다.
+// (실측: 예전엔 페이지를 열 때 /db/get 요청이 0건 → 새로고침마다 누적 판수가 0부터 다시 셌다)
+setTimeout(async ()=>{
   try{
     const r = await fetch(DB_URL + '/get?ns=holdem&key=handsDone');
     const j = await r.json();
     if(typeof j.value === 'number') handsDone = j.value;
   }catch(e){}
-})();
+}, 0);
 
 // 설정(데이터 기록, 자동 상의)을 DB에서 관리 — 새로고침/기기 변경에도 유지
 function applySettings(v){
@@ -2139,7 +2141,7 @@ function applyLogH(h){
   handle.addEventListener('pointerup', end);
   handle.addEventListener('pointercancel', end);
 }
-loadSettings();
+setTimeout(loadSettings, 0);   // DB_URL 선언 뒤에 실행되게 (위 판수 불러오기와 같은 이유)
 
 function finishHand(){
   state.phase='done';
@@ -2151,6 +2153,7 @@ function finishHand(){
     if(state.handStartAt) glog('◆ 이 판에 걸린 시간: '+((Date.now()-state.handStartAt)/1000).toFixed(1)+'초');
     glog('◆ 결과: 승자 '+(win||'-')
        + ' / 내 패 '+(me.hole.length?me.hole.map(cardStr).join(' '):'-')
+       + ' / 전원 패 '+players.map(p=>p.name+' '+(p.hole.length?p.hole.map(cardStr).join(' '):'-')+(p.folded?'(폴드)':'')).join(', ')
        + ' / 보드 '+(state.board.length?state.board.map(cardStr).join(' '):'(없음)')
        + ' / 내 손익 '+((me.stack-start)>=0?'+':'')+(me.stack-start).toLocaleString()
        + ' / 내 스택 '+me.stack.toLocaleString());
@@ -2173,8 +2176,11 @@ function finishHand(){
   // 기록 처리: 켜져 있으면 자동 저장+알림, 꺼져 있으면 소급 저장 버튼 제공
   state.lastRec = buildHandRecord();
   if(document.getElementById('profileOn').checked){
-    commitHandRecord(state.lastRec);
-    state.lastRec = null;
+    const rec = state.lastRec;
+    commitHandRecord(rec).then(ok=>{
+      if(ok){ if(state.lastRec === rec) state.lastRec = null; }
+      else document.getElementById('btnSaveHand').style.display='inline-block';
+    });
   } else {
     document.getElementById('btnSaveHand').style.display='inline-block';
     addChat('sys', '이 판은 저장되지 않았어요 (📝 데이터 기록 꺼짐). 이 판만 저장하려면 하단 [💾 이번 판 기록]을 누르세요.');
@@ -2962,10 +2968,18 @@ btnRaise.onclick=()=>{
 
 document.getElementById('btnConfirm').onclick=()=>{
   if(!pending || !humanTurn()) return;
+  // 확정 줄에 코치 결론이 떠 있었는데 코치평가를 안 눌렀으면 아직 판 기록이 없다 → 지금 남긴다
+  if(pendingCoachAct && !pending.logged){
+    logDecision(pendingLabel(pending), ''); pending.logged = true;
+    const d0 = lastDecision(); if(d0) d0.coachSaid = pendingLabel(pendingCoachAct);
+  }
   const pd = pending; pending = null;
-  // 코치가 결론을 냈는데 내가 다른 선택을 확정했다면 "안 따름"으로 기록
+  // 코치가 결론을 냈는데 내가 다른 선택을 확정했다면 "안 따름"으로 기록.
+  // (예전 식은 내 선택을 내 선택과 비교해서 늘 '따름'으로 남았다)
   const d = lastDecision();
-  if(d && d.coachSaid && d.followed === null) d.followed = (d.choice === pendingLabel(pd));
+  if(d && d.coachSaid && d.followed === null)
+    d.followed = pendingCoachAct ? (pendingCoachAct.type === pd.type && (pd.type !== 'raise' || pendingCoachAct.target === pd.target)) : null;
+  pendingCoachAct = null;
   glog('  ✔ 내가 확정: ' + pendingLabel(pd)
      + (d && d.coachSaid ? ' / 코치는 "'+d.coachSaid+'" → 따름 '+(d.followed?'예':'아니오') : ' / 코치 안 부름'));
   closeDrawerIfOpen();
@@ -3009,11 +3023,14 @@ document.getElementById('btnThoughts').onclick = ()=>{
 };
 
 // 기록 꺼진 채 끝난 판을 소급 저장
-document.getElementById('btnSaveHand').onclick = ()=>{
+document.getElementById('btnSaveHand').onclick = async ()=>{
   if(!state.lastRec) return;
-  commitHandRecord(state.lastRec);
-  state.lastRec = null;
-  document.getElementById('btnSaveHand').style.display='none';
+  const rec = state.lastRec;
+  const ok = await commitHandRecord(rec);
+  if(ok){
+    if(state.lastRec === rec) state.lastRec = null;
+    document.getElementById('btnSaveHand').style.display='none';
+  }
 };
 
 /* ================= 상황 복사 ================= */
@@ -3131,17 +3148,33 @@ function lastDecision(){
   return (d && d.length) ? d[d.length-1] : null;
 }
 // 핸드 기록 확정 저장: DB 기록 + 판수 누적 + 10판마다 코칭 노트 갱신
-function commitHandRecord(rec){
+// 저장 결과를 확인한 뒤에만 '기록됨'이라고 말한다. 예전엔 서버가 실패(500)해도 '기록됨'이 떴다(실측).
+async function commitHandRecord(rec){
   const hdr = { method:'POST', headers:{'Content-Type':'application/json'} };
-  fetch(DB_URL + '/append', Object.assign({}, hdr, {
-    body: JSON.stringify({ ns:'holdem', log:'hands', data:rec }),
-  })).catch(()=>{});
+  let ok = false;
+  try{
+    const r = await fetch(DB_URL + '/append', Object.assign({}, hdr, {
+      body: JSON.stringify({ ns:'holdem', log:'hands', data:rec }),
+    }));
+    ok = r.ok;
+  }catch(e){ ok = false; }
+  if(!ok){
+    addChat('sys', '⚠️ 이번 판 기록 실패 — 서버에 저장되지 않았어요. 하단 [💾 이번 판 기록]으로 다시 시도할 수 있어요.');
+    glog('  ⚠ 핸드 기록 저장 실패 (핸드 #'+rec.hand+')');
+    return false;
+  }
   handsDone++;
-  fetch(DB_URL + '/set', Object.assign({}, hdr, {
-    body: JSON.stringify({ ns:'holdem', key:'handsDone', value: handsDone }),
-  })).catch(()=>{});
-  addChat('sys', '💾 이번 판 기록됨 (누적 '+handsDone+'판'+(handsDone % PROFILE_EVERY === 0 ? ' — 코칭 노트 자동 갱신' : '')+')');
+  let cntOk = false;
+  try{
+    const r2 = await fetch(DB_URL + '/set', Object.assign({}, hdr, {
+      body: JSON.stringify({ ns:'holdem', key:'handsDone', value: handsDone }),
+    }));
+    cntOk = r2.ok;
+  }catch(e){}
+  addChat('sys', '💾 이번 판 기록됨 (누적 '+handsDone+'판'+(handsDone % PROFILE_EVERY === 0 ? ' — 코칭 노트 자동 갱신' : '')+')'
+    + (cntOk ? '' : ' — 단, 누적 판수 저장은 실패'));
   if(coachOnline && handsDone % PROFILE_EVERY === 0) updateProfile();
+  return true;
 }
 
 /* ================= Claude 코치 채팅 ================= */
@@ -3476,6 +3509,9 @@ async function sendToCoach(fullMsg, silent, quiet, fast){
     const j = await pollCoachResult(tk.ticket, ctrl.signal);
     wait.remove();
     if(j.ok){
+      // 코치 답 본문을 타임라인 로그에 남긴다 — 예전엔 길이·시간만 남아 코칭이 맞았는지 나중에 확인할 수 없었다
+      glog('  🎓 코치 답' + (fast ? '(선행 분석)' : '') + ' ' + String(j.reply||'').length + '자: '
+           + String(j.reply||'(빈 응답)').replace(/\s*\n\s*/g, ' ⏎ '));
       sndDing();   // 답변 도착 알림음
       if(!silent) addChat('coach', j.reply || '(빈 응답)');
       return j.reply || '';
