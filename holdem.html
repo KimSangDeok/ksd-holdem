@@ -409,6 +409,12 @@
   }
   #whyInput::placeholder{color:var(--ink3)}
   #btnConfirm{background:linear-gradient(180deg,#4c9cf2,#2563b8);color:#fff;border-color:#3a7fd6}
+  #btnFollow{background:linear-gradient(180deg,#ffd270,#e0a534);color:#2a1c00;border-color:#e6b249;font-weight:800}
+  #pendingText{overflow:hidden;text-overflow:ellipsis;min-width:0;max-width:100%}
+  #btnFollow,#btnConfirm{display:flex;flex-direction:column;align-items:center;justify-content:center}
+  #pendingBox button .bt{display:block;font-weight:800;line-height:1.15}
+  #pendingBox button .ba{display:block;font-size:11.5px;font-weight:800;opacity:.85;line-height:1.15;
+                         max-width:100%;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
   #btnRethink{background:linear-gradient(180deg,#7a4a30,#5a3522);color:#ffe0c8;border-color:#8a5638}
 
   /* ───────── 코치 패널 ───────── */
@@ -552,7 +558,7 @@
   #btnFold,#btnCall,#btnRaise,#btnReserveFold{min-height:44px}
   .preset,.nudge{min-height:44px;min-width:44px}
   #raiseAmt,#whyInput{min-height:44px}
-  #btnWhySend,#btnConfirm,#btnRethink{min-height:44px}
+  #btnWhySend,#btnConfirm,#btnRethink,#btnFollow{min-height:44px}
   .ctlEnd > button{min-height:44px}
   /* 슬라이더: 보이는 선은 얇게 두고 누르는 영역만 44px로 (데스크톱 전용) */
   #raiseSlider{height:44px;accent-color:var(--gold2);cursor:pointer}
@@ -603,7 +609,7 @@
     #pendingBox{flex-wrap:wrap;overflow:visible}
     #pendingText{flex:1 1 100%}
     #whyInput{flex:1 1 100%;min-width:0}
-    #btnWhySend,#btnConfirm,#btnRethink{flex:1}
+    #btnWhySend,#btnConfirm,#btnRethink,#btnFollow{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   }
 
   @media (max-width:620px){
@@ -1064,6 +1070,7 @@
     <div class="ctlRow" id="pendingBox">
       <span id="pendingText"></span>
       <input type="text" id="whyInput" placeholder="이 선택의 이유 (빈 값도 OK)">
+      <button id="btnFollow" style="display:none"></button>
       <button id="btnWhySend">🎓 코치평가</button>
       <button id="btnConfirm">✅ 확정</button>
       <button id="btnRethink">↩ 다시 선택</button>
@@ -2484,12 +2491,15 @@ function chooseAction(type, target){
   pending = { type, target };
   ctlMain.style.display='none';
   raiseBox.style.display='none';
-  document.getElementById('pendingText').textContent = '선택: '+pendingLabel(pending);
+  resetPendingCoach();
   pendingBox.style.display='flex';
+  showPrecoachInline(pending);
   turnHint.textContent='🤔';
   const wi = document.getElementById('whyInput');
   wi.value = '';
-  wi.focus();
+  // 폰에서는 자동으로 입력칸에 커서를 두지 않는다 — 누른 순간 키보드가 올라와 화면을 덮고,
+  // 내리려면 한 번 더 눌러야 했다. 이유를 쓰고 싶을 때만 입력칸을 누르면 된다. (PC 는 그대로)
+  if(!(window.matchMedia && matchMedia('(pointer:coarse)').matches)) wi.focus();
 }
 
 /* ================= 즉시 판정 (로컬 계산, 대기 0초) =================
@@ -2715,6 +2725,7 @@ async function sendPendingReason(){
   const why = document.getElementById('whyInput').value.trim();
   document.getElementById('whyInput').value = '';
   logDecision(label, why);          // 내 선택 + 이유를 이번 판 기록에 남긴다
+  pending.logged = true;
   // ★ 대기 0초 판정 — 코치를 기다리지 않고 게임이 즉시 계산해서 먼저 보여준다
   const lv = localVerdict(pending);
   if(lv){ addChat('local', lv); glog('  ⚡ 즉시 판정 표시 (대기 0초)'); }
@@ -2756,7 +2767,8 @@ async function sendPendingReason(){
     if(waiting) waiting.remove();
     const block = pickPrecoachBlock(text, pending);
     if(block){
-      reply = block; fromPre = true; addChat('coach', block); sndDing();
+      reply = block; fromPre = true;
+      if(!pending || !pending.preShown){ addChat('coach', block); sndDing(); }
       glog('  ✅ 선행 분석 사용 — 내가 실제로 기다린 시간 ' + waited.toFixed(1) + '초'
          + (alreadyDone ? ' (내가 고르기 전에 이미 준비 완료)' : ' (아직 분석 중이어서 그만큼 대기)'));
     } else {
@@ -2780,6 +2792,7 @@ async function sendPendingReason(){
   if(reply && pending && humanTurn()){
     const act = parseVerdictAction(reply) || pending;
     offerCoachAction(act);
+    showPendingCoach(reply, act);
   }
   // ③ 미리 받아둔 답에는 "내가 쓴 이유"에 대한 평가가 없다 → 게임을 막지 않고 뒤따라 받는다
   if(fromPre && why && coachOnline){
@@ -2843,6 +2856,7 @@ function offerCoachAction(act){
     glog('  ✔ 코치 조언 그대로 실행: ' + pendingLabel(act));
     pending = null;
     clearApplyDock();
+    closeDrawerIfOpen();
     hideControls();
     applyAction(players[0], act.type, act.target);
   };
@@ -2855,6 +2869,78 @@ function clearApplyDock(){
   dock.innerHTML = '';
   dock.className = '';
 }
+
+/* ── 확정 줄 안에서 코치 결론 보고 바로 실행 ──
+   예전(실측, 폰 390×844, 코치가 다른 행동을 권할 때): 행동 → 코치평가 → 서랍 열기 → 코치대로 실행 → 서랍 닫기 = 5번.
+   코치 답과 실행 버튼이 아래 서랍 안에만 있어서였다. 이제 결론 한 줄과 실행 버튼을 확정 줄에 같이 띄운다.
+   미리 받아둔 분석(선행 분석)이 이미 있으면 행동을 누르는 순간 바로 보인다 (코치 호출 추가 없음). */
+let pendingCoachAct = null;
+function closeDrawerIfOpen(){
+  const side = document.getElementById('side');
+  if(side && side.classList.contains('open') && typeof setDrawer === 'function') setDrawer(false);
+}
+function resetPendingCoach(){
+  pendingCoachAct = null;
+  const bf = document.getElementById('btnFollow');
+  bf.style.display = 'none'; bf.textContent = '';
+  document.getElementById('btnWhySend').style.display = '';
+  document.getElementById('btnConfirm').textContent = '✅ 확정';
+  document.getElementById('whyInput').placeholder = '이 선택의 이유 (빈 값도 OK)';
+  document.getElementById('pendingText').textContent = '선택: ' + (pending ? pendingLabel(pending) : '');
+}
+function showPendingCoach(text, act){
+  if(!pending || !humanTurn() || !act) return;
+  const m = String(text||'').match(/^(?:최종\s*)?결론\s*[::]\s*([^\n]+)/m);
+  const conc = m ? m[1].trim() : pendingLabel(act);
+  const same = act.type === pending.type && (act.type !== 'raise' || act.target === pending.target);
+  pendingCoachAct = act;
+  document.getElementById('pendingText').textContent =
+    '선택: ' + pendingLabel(pending) + '  ·  🎓 코치: ' + conc;
+  const bf = document.getElementById('btnFollow');
+  document.getElementById('btnWhySend').style.display = 'none';   // 답이 이미 보이므로 (이유 평가는 이유 쓰고 Enter)
+  document.getElementById('whyInput').placeholder = '이유를 쓰고 Enter → 코치가 내 이유를 평가';
+  // 버튼 글자는 두 줄(위: 무엇, 아래: 금액) — 폰 폭 110px 에서 한 줄이면 잘린다(실측)
+  if(same){
+    bf.style.display = 'none';
+    document.getElementById('btnConfirm').innerHTML = '<span class="bt">✅ 확정</span><span class="ba">코치도 같음</span>';
+  } else {
+    bf.innerHTML = '<span class="bt">🎯 코치대로</span><span class="ba">' + pendingLabel(act) + '</span>';
+    bf.style.display = '';
+    document.getElementById('btnConfirm').innerHTML = '<span class="bt">✅ 내 선택</span><span class="ba">' + pendingLabel(pending) + '</span>';
+  }
+  // 위쪽 '코치 분석 준비됨' 알약은 같은 말 — 지워서 승률 줄이 꺾여 컨트롤이 커지는 것을 막는다(실측 390×844 +12.7px)
+  const ps = document.getElementById('preState');
+  if(ps){ ps.textContent = ''; ps.className = ''; }
+}
+function showPrecoachInline(pd){
+  if(!precoach || precoach.key !== precoachKey()) return;
+  const show = ()=>{
+    if(pending !== pd || !humanTurn() || !precoach || !precoach.text) return;
+    const block = pickPrecoachBlock(precoach.text, pd);
+    const act = block ? parseVerdictAction(block) : null;
+    if(!act) return;
+    pd.preShown = true;
+    addChat('coach', block); sndDing();
+    showPendingCoach(block, act);
+    offerCoachAction(act);
+  };
+  if(precoach.done) show();
+  else if(precoach.promise) precoach.promise.then(show);
+}
+document.getElementById('btnFollow').onclick = ()=>{
+  if(!humanTurn() || !pending || !pendingCoachAct) return;
+  const act = pendingCoachAct;
+  // 이 결정을 판 기록에 남긴다 (코치평가를 안 눌렀으면 아직 기록이 없다)
+  if(!pending.logged){ logDecision(pendingLabel(pending), ''); pending.logged = true; }
+  const d = lastDecision();
+  if(d){ d.coachSaid = d.coachSaid || pendingLabel(act); d.followed = true; }
+  glog('  ✔ 코치 결론대로 실행 (확정 줄에서): ' + pendingLabel(act));
+  pending = null; pendingCoachAct = null;
+  clearApplyDock();
+  closeDrawerIfOpen();
+  hideControls();
+  applyAction(players[0], act.type, act.target);
+};
 document.getElementById('whyInput').addEventListener('keydown', e=>{
   if(e.key==='Enter') sendPendingReason();
 });
@@ -2882,6 +2968,7 @@ document.getElementById('btnConfirm').onclick=()=>{
   if(d && d.coachSaid && d.followed === null) d.followed = (d.choice === pendingLabel(pd));
   glog('  ✔ 내가 확정: ' + pendingLabel(pd)
      + (d && d.coachSaid ? ' / 코치는 "'+d.coachSaid+'" → 따름 '+(d.followed?'예':'아니오') : ' / 코치 안 부름'));
+  closeDrawerIfOpen();
   hideControls();
   applyAction(players[0], pd.type, pd.target);
 };
