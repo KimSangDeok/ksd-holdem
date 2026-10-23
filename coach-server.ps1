@@ -1,4 +1,4 @@
-﻿# 홀덤 코치 중계 서버
+﻿﻿# 홀덤 코치 중계 서버
 # holdem.html 의 채팅을 받아 Claude Code CLI(claude -p)로 전달하고 답변을 돌려준다.
 # 실행: 배포 서버(리눅스)에서 서비스로 상시 구동한다. 집 PC에서 .bat으로 실행하던 방식은 더 이상 쓰지 않는다.
 
@@ -63,6 +63,22 @@ Write-Host "  이 서버 프로세스가 멈추면 코치 채팅이 중단됩니
 Write-Host ""
 
 $script:sessionId = $null
+# 서명된 /status 로 보는 서버 정보. 서버 화면 출력은 밖에서 볼 수 없어서 오류는 따로 모아 둔다(최근 100건)
+$script:startedAt = Get-Date
+$script:selfSha = '?'
+try { $script:selfSha = (Get-FileHash -Algorithm SHA1 -LiteralPath $PSCommandPath).Hash.Substring(0, 12).ToLower() } catch {}
+$script:recentErrors = New-Object System.Collections.Generic.Queue[string]
+function Add-ServerError([string]$msg) {
+    try {
+        # 인증 없는 요청이 보낸 글이 오류 문구에 섞일 수 있다(예: JSON 해석 오류에 키 이름이 그대로 실림).
+        # 한 줄·120자로 줄이고, JSON 해석 오류는 내용 없이 적는다
+        if ($msg -match 'JSON') { $msg = ($msg -split ':')[0] + ': 본문 JSON 형식 오류' }
+        $msg = $msg -replace '\s+', ' '
+        if ($msg.Length -gt 120) { $msg = $msg.Substring(0, 120) + '…' }
+        $script:recentErrors.Enqueue((Get-Date -Format 'MM-dd HH:mm:ss') + '  ' + $msg)
+        while ($script:recentErrors.Count -gt 100) { [void]$script:recentErrors.Dequeue() }
+    } catch {}
+}
 # 세션 누적 호출 수. 이 횟수를 넘으면 세션을 새로 시작해 응답 속도를 되돌린다.
 # (대화가 길어질수록 --resume 이 실어 나르는 양이 커져 느려지기 때문)
 $script:turnCount = 0
@@ -301,6 +317,70 @@ function Read-LogTail([string]$path, [int]$lines) {
     return ($arr.GetRange($from, $arr.Count - $from) -join "`n")
 }
 
+# 지금 디스크에 받아 둔 커밋(배포 반영 확인용). git을 실행하면 느릴 때 루프 전체가 멈춰서(검증 실측 20초) .git 파일을 직접 읽는다
+function Get-DeployCommit {
+    try {
+        $gitDir = Join-Path $PSScriptRoot '.git'
+        $head = ([System.IO.File]::ReadAllText((Join-Path $gitDir 'HEAD'))).Trim()
+        if ($head -notmatch '^ref: (.+)$') { return $head.Substring(0, [math]::Min(12, $head.Length)) }
+        $ref = $Matches[1]
+        $rf = Join-Path $gitDir $ref
+        if (Test-Path -LiteralPath $rf) { return ([System.IO.File]::ReadAllText($rf)).Trim().Substring(0, 12) + ' ' + $ref }
+        $packed = Join-Path $gitDir 'packed-refs'
+        if (Test-Path -LiteralPath $packed) {
+            foreach ($l in [System.IO.File]::ReadAllLines($packed)) { if ($l.EndsWith(' ' + $ref)) { return $l.Substring(0, 12) + ' ' + $ref } }
+        }
+        return '?'
+    } catch { return '' }
+}
+
+# 서명된 요청 공통 확인: 시각(60초 전~10초 뒤), 이미 받은 시각 거절(재사용 방지), 서명
+function Test-SignedRequest([string]$text, [string]$tStr, [string]$sig) {
+    $tms = [int64]0
+    if (-not [int64]::TryParse($tStr, [ref]$tms)) { return $false }
+    $now = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+    if (($now - $tms) -gt 60000 -or ($tms - $now) -gt 10000) { return $false }
+    if ($script:usedLogT.ContainsKey($tms)) { return $false }
+    if (-not (Test-LogSignature $text $sig)) { return $false }
+    $script:usedLogT[$tms] = $now
+    foreach ($k in @($script:usedLogT.Keys)) { if ($now - $script:usedLogT[$k] -gt 120000) { $script:usedLogT.Remove($k) } }
+    return $true
+}
+
+# 요청 본문 읽기 — 2MB까지, 3초 동안 아무것도 안 오면 끊고, 계속 오더라도 전체 8초에서 끊는다.
+# 요청을 한 번에 하나씩 처리하는 구조라, 본문을 덜 보내고 붙잡는 연결 하나가 서버 전체(게임 화면 포함)를
+# 무기한 멈췄다(검증 실측: 그동안 /ping·GET / 모두 응답 없음). 느리지만 계속 들어오는 폰 업로드는 8초까지 기다린다.
+# 끊을 때는 상태 코드(408 시간 초과 / 413 너무 큼)를 먼저 정한다. 그냥 끊으면 클라이언트가 '200 빈 응답'을 받아
+# 게임이 저장 안 된 판을 '기록됨'으로 표시했다(검증 실측).
+# 남은 한계: 붙잡는 연결이 여럿이면 하나씩 차례로 기다린다(연결당 최대 8초). 없애려면 요청을 동시에 처리하는 구조가 필요하다.
+function Read-Body($context, [int]$maxBytes = 2MB, [int]$idleMs = 3000, [int]$totalMs = 8000) {
+    $request = $context.Request
+    if (-not $request.HasEntityBody) { return ,([byte[]]@()) }
+    $ms = New-Object System.IO.MemoryStream
+    $buf = New-Object byte[] 65536
+    $deadline = [DateTime]::UtcNow.AddMilliseconds($totalMs)
+    while ($true) {
+        $left = [int][math]::Min($idleMs, ($deadline - [DateTime]::UtcNow).TotalMilliseconds)
+        $task = $null
+        if ($left -gt 0) { $task = $request.InputStream.ReadAsync($buf, 0, $buf.Length) }
+        $done = $false
+        if ($task) { try { $done = $task.Wait($left) } catch { try { $context.Response.Abort() } catch {}; throw '요청 본문 읽기 실패(연결 끊김)' } }
+        if (-not $done) {
+            try { $context.Response.StatusCode = 408; $context.Response.Abort() } catch {}
+            throw '요청 본문 읽기 시간 초과'
+        }
+        $n = $task.Result
+        if ($n -le 0) { break }
+        $ms.Write($buf, 0, $n)
+        if ($ms.Length -gt $maxBytes) {
+            try { $context.Response.StatusCode = 413; $context.Response.Abort() } catch {}
+            throw '요청 본문이 너무 큼'
+        }
+    }
+    return ,($ms.ToArray())
+}
+function Read-BodyText($context) { return [System.Text.Encoding]::UTF8.GetString((Read-Body $context)) }
+
 function Send-Json($response, [int]$code, [string]$json) {
     $buf = [System.Text.Encoding]::UTF8.GetBytes($json)
     $response.StatusCode = $code
@@ -314,13 +394,16 @@ while ($listener.IsListening) {
     $ctx = $listener.GetContext()
     # 요청 하나에서 난 예외로 서버 프로세스가 끝나지 않게 루프 본문 전체를 try로 감싼다(아래 catch, 들여쓰기는 그대로 둠).
     # 실측: 본문 없는 POST 한 번이면 응답 객체가 이미 닫혀 있어 끝의 404 설정에서 예외 → 서버 종료(게임 화면까지 멈춤).
-    # (본문을 덜 보내고 붙잡는 연결처럼 '멈춤'은 예외가 아니라서 이 try로 막히지 않는다 — 남은 과제)
+    # 본문을 덜 보내고 붙잡는 연결처럼 '멈춤'은 예외가 아니라서 이 try로는 못 막는다 → Read-Body의 시간 제한과 아래 KeepAlive로 막는다.
     try {
     $req = $ctx.Request
     $res = $ctx.Response
     $res.Headers.Add('Access-Control-Allow-Origin', '*')
     $res.Headers.Add('Access-Control-Allow-Headers', 'Content-Type')
     $res.Headers.Add('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+    # 본문이 있는 요청은 연결을 유지하지 않는다. 본문을 안 읽는 경로(404·/ping 등)에서 응답을 닫을 때 HttpListener가
+    # 남은 본문을 끝까지 읽느라(시간 상한 없음) 천천히 보내는 연결 하나에 서버가 무기한 멈췄다(원래 있던 문제, 검증 실측)
+    if ($req.HasEntityBody) { $res.KeepAlive = $false }
 
     if ($req.HttpMethod -eq 'OPTIONS') {
         $res.StatusCode = 204
@@ -346,17 +429,13 @@ while ($listener.IsListening) {
             $lsig = [string]$req.QueryString['sig']
             $lpath = $null
             if ($lf -eq 'game') { $lpath = $gameLogFile } elseif ($lf -eq 'coach') { $lpath = $logFile }
-            $ln = 0; $lms = [int64]0
-            $lnow = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+            $ln = 0
             $okReq = $lpath -and [int]::TryParse($lt, [ref]$ln) -and $ln -ge 1 -and $ln -le 20000 -and
-                     [int64]::TryParse($lts, [ref]$lms) -and ($lnow - $lms) -le 60000 -and ($lms - $lnow) -le 10000 -and
-                     -not $script:usedLogT.ContainsKey($lms)
-            if (-not $okReq -or -not (Test-LogSignature ("logs|$lf|$lt|$lts") $lsig)) {
+                     (Test-SignedRequest ("logs|$lf|$lt|$lts") $lts $lsig)
+            if (-not $okReq) {
                 Send-Json $res 403 '{"ok":false,"error":"서명이 없거나 맞지 않습니다"}'
                 continue
             }
-            $script:usedLogT[$lms] = $lnow
-            foreach ($k in @($script:usedLogT.Keys)) { if ($lnow - $script:usedLogT[$k] -gt 120000) { $script:usedLogT.Remove($k) } }
             $ltext = ''
             if (Test-Path -LiteralPath $lpath) { $ltext = Read-LogTail $lpath $ln }
             $lbuf = [System.Text.Encoding]::UTF8.GetBytes($ltext)
@@ -366,7 +445,92 @@ while ($listener.IsListening) {
             $res.OutputStream.Write($lbuf, 0, $lbuf.Length)
             $res.Close()
         } catch {
+            Add-ServerError ('/logs: ' + $_.Exception.Message)
             try { Send-Json $res 500 '{"ok":false,"error":"로그 읽기 실패"}' } catch {}
+        }
+        continue
+    }
+
+    # ===== 서버 상태 (서명된 요청만) =====
+    # GET /status?t=&sig=   서명 대상 글: "status|{t}"
+    # 서버 밖에서는 이 프로그램의 화면 출력·켜진 시간·실제로 돌고 있는 버전을 볼 수 없어서 만든 읽기 전용 창구
+    if ($req.HttpMethod -eq 'GET' -and $req.Url.AbsolutePath -eq '/status') {
+        try {
+            $sts = [string]$req.QueryString['t']
+            if (-not (Test-SignedRequest ("status|$sts") $sts ([string]$req.QueryString['sig']))) {
+                Send-Json $res 403 '{"ok":false,"error":"서명이 없거나 맞지 않습니다"}'
+                continue
+            }
+            $deploy = Get-DeployCommit
+            $htmlFile = Join-Path $PSScriptRoot 'holdem.html'
+            $size = { param($f) if (Test-Path -LiteralPath $f) { (Get-Item -LiteralPath $f).Length } else { $null } }
+            $sha = { param($f) try { (Get-FileHash -Algorithm SHA1 -LiteralPath $f).Hash.Substring(0, 12).ToLower() } catch { '?' } }
+            $running = 0
+            foreach ($j in @($script:jobs.Values)) { if ($j.job.State -eq 'Running') { $running++ } }
+            $st = [ordered]@{
+                ok = $true
+                startedAt = $script:startedAt.ToString('yyyy-MM-dd HH:mm:ss zzz')
+                uptimeMin = [math]::Round(((Get-Date) - $script:startedAt).TotalMinutes, 1)
+                runningScriptSha1 = $script:selfSha
+                diskScriptSha1 = (& $sha $PSCommandPath)
+                holdemHtmlSha1 = (& $sha $htmlFile)
+                deploy = $deploy
+                powershell = $PSVersionTable.PSVersion.ToString()
+                dotnet = [System.Environment]::Version.ToString()
+                os = [System.Runtime.InteropServices.RuntimeInformation]::OSDescription
+                claude = $script:cliVersion
+                coachSession = [ordered]@{ turn = $script:turnCount; max = $script:sessionMaxTurns; hasSession = [bool]$script:sessionId }
+                jobs = [ordered]@{ total = $script:jobs.Count; running = $running }
+                fileBytes = [ordered]@{ gameLog = (& $size $gameLogFile); coachLog = (& $size $logFile); coachingNote = (& $size $profileFile) }
+                recentErrors = @($script:recentErrors.ToArray())
+            }
+            Send-Json $res 200 ($st | ConvertTo-Json -Depth 4 -Compress)
+        } catch {
+            Add-ServerError ('/status: ' + $_.Exception.Message)
+            try { Send-Json $res 500 '{"ok":false,"error":"상태 조회 실패"}' } catch {}
+        }
+        continue
+    }
+
+    # ===== 기록 서버 읽기 (서명된 요청만, 읽기 두 종류만) =====
+    # GET /dbread?kind=get&ns=&name=&t=&sig=         → 기록 서버 /get?ns=&key=       (서명 글 "dbread|get|{ns}|{name}||{t}")
+    # GET /dbread?kind=log&ns=&name=&tail=&t=&sig=   → 기록 서버 /log?ns=&log=&tail= (서명 글 "dbread|log|{ns}|{name}|{tail}|{t}")
+    # 쓰기(/set·/append)는 열지 않는다.
+    if ($req.HttpMethod -eq 'GET' -and $req.Url.AbsolutePath -eq '/dbread') {
+        try {
+            $dk = [string]$req.QueryString['kind']; $dns = [string]$req.QueryString['ns']; $dname = [string]$req.QueryString['name']
+            $dtail = [string]$req.QueryString['tail']; $dts = [string]$req.QueryString['t']
+            $dn = 0
+            $okReq = ($dns -cmatch '^[A-Za-z0-9_-]{1,64}\z') -and ($dname -cmatch '^[A-Za-z0-9_-]{1,64}\z') -and
+                     (($dk -ceq 'get' -and $dtail -eq '') -or
+                      ($dk -ceq 'log' -and [int]::TryParse($dtail, [ref]$dn) -and $dn -ge 1 -and $dn -le 2000 -and $dtail -ceq [string]$dn)) -and
+                     (Test-SignedRequest ("dbread|$dk|$dns|$dname|$dtail|$dts") $dts ([string]$req.QueryString['sig']))
+            if (-not $okReq) {
+                Send-Json $res 403 '{"ok":false,"error":"서명이 없거나 맞지 않습니다"}'
+                continue
+            }
+            $target = if ($dk -ceq 'get') { "http://127.0.0.1:8770/get?ns=$dns&key=$dname" } else { "http://127.0.0.1:8770/log?ns=$dns&log=$dname&tail=$dn" }
+            $hwr = [System.Net.HttpWebRequest]::Create($target)
+            $hwr.Method = 'GET'; $hwr.Timeout = 10000; $hwr.ReadWriteTimeout = 10000
+            $resp = $hwr.GetResponse()
+            try {
+                $rs = $resp.GetResponseStream()
+                $ms2 = New-Object System.IO.MemoryStream
+                $b2 = New-Object byte[] 65536
+                while (($n2 = $rs.Read($b2, 0, $b2.Length)) -gt 0) {
+                    $ms2.Write($b2, 0, $n2)
+                    if ($ms2.Length -gt 8MB) { throw '기록 서버 응답이 너무 큼' }
+                }
+                $out = $ms2.ToArray()
+                $res.StatusCode = [int]$resp.StatusCode
+                if ($resp.ContentType) { $res.ContentType = $resp.ContentType }
+                $res.ContentLength64 = $out.Length
+                $res.OutputStream.Write($out, 0, $out.Length)
+                $res.Close()
+            } finally { $resp.Close() }
+        } catch {
+            Add-ServerError ('/dbread: ' + $_.Exception.Message)
+            try { Send-Json $res 502 '{"ok":false,"error":"기록 서버 읽기 실패"}' } catch {}
         }
         continue
     }
@@ -382,8 +546,9 @@ while ($listener.IsListening) {
             $hwr.Timeout = 10000
             if ($req.HasEntityBody) {
                 if ($req.ContentType) { $hwr.ContentType = $req.ContentType }
+                $bodyBytes = Read-Body $ctx
                 $reqStream = $hwr.GetRequestStream()
-                $req.InputStream.CopyTo($reqStream)
+                $reqStream.Write($bodyBytes, 0, $bodyBytes.Length)
                 $reqStream.Close()
             }
             $resp = $hwr.GetResponse()
@@ -397,6 +562,7 @@ while ($listener.IsListening) {
             $res.Close()
             $resp.Close()
         } catch {
+            Add-ServerError ('/db 중계: ' + $_.Exception.Message)
             try { Send-Json $res 502 '{"ok":false,"error":"기록 서버 중계 실패"}' } catch {}
         }
         continue
@@ -404,9 +570,9 @@ while ($listener.IsListening) {
 
     # 게임에서 보내는 이벤트를 타임라인 로그에 기록
     if ($req.HttpMethod -eq 'POST' -and $req.Url.AbsolutePath -eq '/gamelog') {
+        try { $graw = Read-BodyText $ctx } catch { Add-ServerError ('/gamelog: ' + $_.Exception.Message); try { $res.Abort() } catch {}; continue }
         try {
-            $rd = New-Object System.IO.StreamReader($req.InputStream, [System.Text.Encoding]::UTF8)
-            $b = $rd.ReadToEnd() | ConvertFrom-Json
+            $b = $graw | ConvertFrom-Json
             # 게임이 보낸 '발생 시각'이 있으면 그걸 쓴다 (전송 지연에 순서가 흔들리지 않게)
             if ($b.text) {
                 # 인증 없는 주소라 한 줄 길이에 상한을 둔다 (정상 기록은 코치 답변을 포함해도 수천 자)
@@ -429,9 +595,9 @@ while ($listener.IsListening) {
 
     # 행동 음성 안내 (Windows TTS로 즉시 발화)
     if ($req.HttpMethod -eq 'POST' -and $req.Url.AbsolutePath -eq '/say') {
+        try { $sraw = Read-BodyText $ctx } catch { Add-ServerError ('/say: ' + $_.Exception.Message); try { $res.Abort() } catch {}; continue }
         try {
-            $reader = New-Object System.IO.StreamReader($req.InputStream, [System.Text.Encoding]::UTF8)
-            $b = $reader.ReadToEnd() | ConvertFrom-Json
+            $b = $sraw | ConvertFrom-Json
             if ($b.text -and $script:tts) {
                 # 음량 슬라이더 값(0~100) 반영. 없으면 100
                 if ($null -ne $b.vol) { try { $script:tts.Volume = [Math]::Max(0, [Math]::Min(100, [int]$b.vol)) } catch {} }
@@ -454,7 +620,11 @@ while ($listener.IsListening) {
 
     # 플레이어 프로필 갱신: 지금까지의 대화를 바탕으로 코치가 프로필을 다시 작성
     if ($req.HttpMethod -eq 'POST' -and $req.Url.AbsolutePath -eq '/profile-update') {
+        # 게임은 늘 핸드 기록을 본문에 담아 보낸다. 본문이 없으면 코치(claude) 호출을 띄우지 않는다
+        # (예전엔 본문 없는 요청에도 코칭 노트 작성 호출이 실제로 나갔다 — 검증 실측)
+        if (-not $req.HasEntityBody) { try { Send-Json $res 400 '{"ok":false,"reply":"본문이 없습니다"}' } catch {}; continue }
         try {
+            $raw2 = Read-BodyText $ctx
             $existing = '(아직 없음)'
             if (Test-Path $profileFile) {
                 $e = [System.IO.File]::ReadAllText($profileFile, (New-Object System.Text.UTF8Encoding($false)))
@@ -463,8 +633,6 @@ while ($listener.IsListening) {
             # 게임이 보낸 실제 핸드 기록 (없으면 대화 기억에만 의존 → 근거 없는 노트가 됨)
             $handsText = ''
             try {
-                $reader2 = New-Object System.IO.StreamReader($req.InputStream, [System.Text.Encoding]::UTF8)
-                $raw2 = $reader2.ReadToEnd()
                 if ($raw2) { $handsText = [string](($raw2 | ConvertFrom-Json).hands) }
             } catch {}
 
@@ -489,6 +657,7 @@ while ($listener.IsListening) {
             Send-Json $res 200 (@{ ticket = $id } | ConvertTo-Json -Compress)
         } catch {
             Write-Host "프로필 갱신 오류: $_" -ForegroundColor Red
+            Add-ServerError ('/profile-update: ' + $_.Exception.Message)
             try { Send-Json $res 500 (@{ ok = $false; reply = "프로필 갱신 실패: $_" } | ConvertTo-Json -Depth 3) } catch {}
         }
         continue
@@ -529,10 +698,12 @@ while ($listener.IsListening) {
     }
 
     if ($req.HttpMethod -eq 'POST' -and $req.Url.AbsolutePath -eq '/chat') {
+        # 본문이 없거나 질문이 비면 코치(claude) 호출을 띄우지 않는다 (예전엔 본문 없는 요청에도 호출이 나갔다)
+        if (-not $req.HasEntityBody) { try { Send-Json $res 400 '{"reply":"질문이 없습니다"}' } catch {}; continue }
         try {
-            $reader = New-Object System.IO.StreamReader($req.InputStream, [System.Text.Encoding]::UTF8)
-            $body = $reader.ReadToEnd() | ConvertFrom-Json
+            $body = (Read-BodyText $ctx) | ConvertFrom-Json
             $q = [string]$body.message
+            if (-not $q.Trim()) { Send-Json $res 400 '{"reply":"질문이 없습니다"}'; continue }
             # 화면에서 선택한 코치 모델 (허용 목록만)
             $mdl = [string]$body.model
             if ($mdl -notin @('claude-haiku-4-5', 'claude-sonnet-5')) { $mdl = $coachModel }
@@ -547,6 +718,7 @@ while ($listener.IsListening) {
             Send-Json $res 200 (@{ ticket = $id } | ConvertTo-Json -Compress)
         } catch {
             Write-Host "오류: $_" -ForegroundColor Red
+            Add-ServerError ('/chat: ' + $_.Exception.Message)
             try { Send-Json $res 500 (@{ reply = "서버 오류: $_" } | ConvertTo-Json -Depth 3) } catch {}
         }
         continue
@@ -638,6 +810,7 @@ while ($listener.IsListening) {
     $res.Close()
     } catch {
         Write-Host ("  ⚠ 요청 처리 오류 (서버는 계속 동작): " + $_.Exception.Message) -ForegroundColor Yellow
+        try { Add-ServerError ($ctx.Request.HttpMethod + ' ' + $ctx.Request.Url.AbsolutePath + ': ' + $_.Exception.Message) } catch {}
         # 가능하면 500을 보낸다. Abort만 하면 클라이언트는 '200 빈 본문'을 받아 성공처럼 보였다(검증 실측)
         try { Send-Json $ctx.Response 500 '{"ok":false,"error":"서버 오류"}' } catch { try { $ctx.Response.Abort() } catch {} }
     }
