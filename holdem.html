@@ -3494,12 +3494,14 @@ btnRaise.onclick=()=>{
 
 document.getElementById('btnConfirm').onclick=()=>{
   if(!pending || !humanTurn()) return;
+  // 코치평가를 안 눌렀어도 즉시 판정(표·가격 근거)은 보여준다. 아래에서 기록 표시를 먼저 켜면 이 조건이 꺼져서,
+  // 코치 결론이 확정 줄에 떠 있을 때 [✅ 확정]을 누르면 근거가 하나도 안 나왔다(핸드 #1: 코치 '콜'만 남음)
+  if(!pending.logged){ const lv = localVerdict(pending); if(lv) addChat('local', lv); }
   // 확정 줄에 코치 결론이 떠 있었는데 코치평가를 안 눌렀으면 아직 판 기록이 없다 → 지금 남긴다
   if(pendingCoachAct && !pending.logged){
     logDecision(pendingLabel(pending), ''); pending.logged = true;
     const d0 = lastDecision(); if(d0) d0.coachSaid = pendingLabel(pendingCoachAct);
   }
-  if(!pending.logged){ const lv = localVerdict(pending); if(lv) addChat('local', lv); }   // 코치평가를 안 눌렀어도 즉시 판정은 보여준다
   const pd = pending; pending = null;
   // 코치가 결론을 냈는데 내가 다른 선택을 확정했다면 "안 따름"으로 기록.
   // (예전 식은 내 선택을 내 선택과 비교해서 늘 '따름'으로 남았다)
