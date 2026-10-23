@@ -3381,16 +3381,7 @@ function offerCoachAction(act){
   const b = document.createElement('button');
   b.className = 'applyBtn';
   b.textContent = '🎯 코치 결론대로 실행: ' + pendingLabel(act);
-  b.onclick = ()=>{
-    if(!humanTurn() || !pending){ clearApplyDock(); return; }
-    const d = lastDecision(); if(d) d.followed = true;   // 코치 조언 그대로 실행
-    glog('  ✔ 코치 조언 그대로 실행: ' + pendingLabel(act));
-    pending = null;
-    clearApplyDock();
-    closeDrawerIfOpen();
-    hideControls();
-    applyAction(players[0], act.type, act.target);
-  };
+  b.onclick = ()=>followCoach(act, '채팅 서랍에서');
   dock.appendChild(b);
   dock.className = 'on';
 }
@@ -3458,20 +3449,26 @@ function showPrecoachInline(pd){
   if(precoach.done) show();
   else if(precoach.promise) precoach.promise.then(show);
 }
-document.getElementById('btnFollow').onclick = ()=>{
-  if(!humanTurn() || !pending || !pendingCoachAct) return;
-  const act = pendingCoachAct;
+// 코치 결론대로 실행 — 확정 줄의 [🎯 코치대로]와 채팅 서랍의 [🎯 코치 결론대로 실행]이 같은 처리를 한다.
+// 서랍 버튼은 따로 처리하면서 즉시 판정(표·가격 근거)을 띄우지 않았고, 이 결정을 판 기록에 남기지 않아
+// '조언 따름'이 엉뚱한 이전 결정에 붙었다(핸드 #1 실서버 로그: '코치 조언 그대로 실행: 콜 500').
+function followCoach(act, where){
+  if(!humanTurn() || !pending){ clearApplyDock(); return; }
   if(!pending.logged){ const lv = localVerdict(act); if(lv) addChat('local', lv); }   // 실행할 행동에 대한 즉시 판정
   // 이 결정을 판 기록에 남긴다 (코치평가를 안 눌렀으면 아직 기록이 없다)
   if(!pending.logged){ logDecision(pendingLabel(pending), ''); pending.logged = true; }
   const d = lastDecision();
   if(d){ d.coachSaid = d.coachSaid || pendingLabel(act); d.followed = true; }
-  glog('  ✔ 코치 결론대로 실행 (확정 줄에서): ' + pendingLabel(act));
+  glog('  ✔ 코치 결론대로 실행 (' + where + '): ' + pendingLabel(act));
   pending = null; pendingCoachAct = null;
   clearApplyDock();
   closeDrawerIfOpen();
   hideControls();
   applyAction(players[0], act.type, act.target);
+}
+document.getElementById('btnFollow').onclick = ()=>{
+  if(!humanTurn() || !pending || !pendingCoachAct) return;
+  followCoach(pendingCoachAct, '확정 줄에서');
 };
 document.getElementById('whyInput').addEventListener('keydown', e=>{
   if(e.key==='Enter') sendPendingReason();
