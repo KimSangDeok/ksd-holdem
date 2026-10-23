@@ -1,4 +1,4 @@
-﻿﻿# 홀덤 코치 중계 서버
+﻿# 홀덤 코치 중계 서버
 # holdem.html 의 채팅을 받아 Claude Code CLI(claude -p)로 전달하고 답변을 돌려준다.
 # 실행: 배포 서버(리눅스)에서 서비스로 상시 구동한다. 집 PC에서 .bat으로 실행하던 방식은 더 이상 쓰지 않는다.
 
@@ -364,7 +364,7 @@ function Read-Body($context, [int]$maxBytes = 2MB, [int]$idleMs = 3000, [int]$to
         $task = $null
         if ($left -gt 0) { $task = $request.InputStream.ReadAsync($buf, 0, $buf.Length) }
         $done = $false
-        if ($task) { try { $done = $task.Wait($left) } catch { try { $context.Response.Abort() } catch {}; throw '요청 본문 읽기 실패(연결 끊김)' } }
+        if ($task) { try { $done = $task.Wait($left) } catch { try { $context.Response.StatusCode = 400; $context.Response.Abort() } catch {}; throw '요청 본문 읽기 실패(연결 끊김)' } }
         if (-not $done) {
             try { $context.Response.StatusCode = 408; $context.Response.Abort() } catch {}
             throw '요청 본문 읽기 시간 초과'
@@ -625,6 +625,8 @@ while ($listener.IsListening) {
         if (-not $req.HasEntityBody) { try { Send-Json $res 400 '{"ok":false,"reply":"본문이 없습니다"}' } catch {}; continue }
         try {
             $raw2 = Read-BodyText $ctx
+            # 길이 표시 없이 빈 본문(chunked 0바이트)이 와도 호출하지 않는다 (검증 실측: 이 경우 호출이 나갔다)
+            if (-not $raw2.Trim()) { Send-Json $res 400 '{"ok":false,"reply":"본문이 없습니다"}'; continue }
             $existing = '(아직 없음)'
             if (Test-Path $profileFile) {
                 $e = [System.IO.File]::ReadAllText($profileFile, (New-Object System.Text.UTF8Encoding($false)))
