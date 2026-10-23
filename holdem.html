@@ -1751,7 +1751,7 @@ function rangeEquity(iters){
     for(let k=0;k<cands.length;k++){
       if(!w[k]) continue;
       const r1 = cands[k][0]>>2, r2 = cands[k][1]>>2;
-      mix[r1===r2 ? 'pair' : (r1===14||r2===14) ? 'ace' : (r1>=10&&r2>=10) ? 'bw' : 'other'] += w[k];
+      mix[r1===r2 ? 'pair' : (r1===14||r2===14) ? 'ace' : (r1>=10&&r2>=10) ? 'bw' : 'other'] += w[k];   // bw = 10·J·Q·K 두 장(A는 위에서 따로 셈)
       if(myNow !== null){
         const v = fastEval(Int32Array.from([cands[k][0], cands[k][1]].concat(boardI)), 2 + boardI.length);
         ahead += w[k] * (v > myNow ? 1 : v === myNow ? 0.5 : 0);
@@ -3625,7 +3625,7 @@ function situationText(includePrompt){
         lines.push('▶ 상대 읽기 (게임 계산 — 봇의 실제 행동 규칙을 거꾸로 적용):');
         dr.reads.forEach(r=>{
           lines.push('  '+r.name+': '+r.acts.join(', ')+' → 이렇게 하는 패는 전체의 약 '+r.width+'%'
-            +' (포켓 페어 '+r.mix.pair+'% · A 포함 '+r.mix.ace+'% · 그림패 2장 '+r.mix.bw+'% · 그 밖 '+r.mix.other+'%)'
+            +' (포켓 페어 '+r.mix.pair+'% · A 포함 '+r.mix.ace+'% · 10 이상 2장 '+r.mix.bw+'% · 그 밖 '+r.mix.other+'%)'
             +(r.ahead !== null ? '. 지금 보드에서 내 패보다 앞선 패 '+r.ahead+'%' : ''));
         });
         if(!callPrice()) lines.push('  이 범위 기준 끝까지 갔을 때 내 승률 '+dr.pct+'% (상대를 무작위로 보면 '+dr.rand+'%)');
