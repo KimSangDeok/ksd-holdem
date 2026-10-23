@@ -258,6 +258,49 @@ function Write-GameLog([string]$text) {
     } catch {}
 }
 
+# ===== 로그 읽기 서명 확인 =====
+# 저장소가 공개라 서버 코드에 비밀번호를 둘 수 없다(규칙 9). 그래서 서버에는 '공개 키'만 둔다.
+# 요청은 서버 밖(Claude 작업 환경의 HOLDEM_LOG_KEY)에만 있는 개인 키로 서명한다.
+# 공개 키로는 확인만 되고 서명을 만들 수는 없다 → 코드를 다 봐도 로그를 읽을 수 없다.
+# 서명 방식: ECDSA P-256 + SHA-256, DER 서명을 base64url로. 읽는 쪽 스크립트는 read-logs.sh
+$logReaderPubKey = 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEDIicPqtRhjxoJp2gv6UWIgGrTBbnT+Hewep8IpNe4AZhfoHRUVYHZrACNmQWahFKRm+BqAh2emP2Q/OfPi41Iw=='
+$script:usedLogT = @{}   # 최근에 받은 /logs 요청의 시각(t) — 엿본 주소를 다시 보내도 받지 않는다
+function Test-LogSignature([string]$text, [string]$sigB64Url) {
+    try {
+        if (-not $sigB64Url) { return $false }
+        $s = $sigB64Url.Replace('-', '+').Replace('_', '/')
+        switch ($s.Length % 4) { 2 { $s += '==' } 3 { $s += '=' } }
+        $ec = [System.Security.Cryptography.ECDsa]::Create()
+        $read = 0
+        $ec.ImportSubjectPublicKeyInfo([Convert]::FromBase64String($logReaderPubKey), [ref]$read)
+        return $ec.VerifyData([System.Text.Encoding]::UTF8.GetBytes($text), [Convert]::FromBase64String($s),
+            [System.Security.Cryptography.HashAlgorithmName]::SHA256,
+            [System.Security.Cryptography.DSASignatureFormat]::Rfc3279DerSequence)
+    } catch { return $false }
+}
+
+# 로그 파일의 끝 N줄. 끝에서부터 최대 4MB만 읽는다.
+# Get-Content -Tail 은 마지막 줄 길이의 제곱에 비례해 느려져, 긴 줄 하나(인증 없는 /gamelog로 남길 수 있다)로
+# 서버 전체가 멈췄다(검증 실측: 800KB 줄 13.5초, 50MB 한 줄은 5분 넘게 응답 없음).
+function Read-LogTail([string]$path, [int]$lines) {
+    $max = 4MB
+    $fs = [System.IO.File]::Open($path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+    try {
+        $start = [math]::Max([int64]0, $fs.Length - $max)
+        [void]$fs.Seek($start, [System.IO.SeekOrigin]::Begin)
+        $buf = New-Object byte[] ([int]($fs.Length - $start))
+        $got = 0
+        while ($got -lt $buf.Length) { $n = $fs.Read($buf, $got, $buf.Length - $got); if ($n -le 0) { break }; $got += $n }
+    } finally { $fs.Dispose() }
+    $text = [System.Text.Encoding]::UTF8.GetString($buf, 0, $got)
+    if ($text.Length -gt 0 -and $text[0] -eq [char]0xFEFF) { $text = $text.Substring(1) }
+    $arr = [System.Collections.Generic.List[string]]::new([string[]]($text -split "`r?`n"))
+    if ($start -gt 0 -and $arr.Count -gt 0) { $arr.RemoveAt(0) }                    # 중간에서 잘린 첫 줄은 버린다
+    if ($arr.Count -gt 0 -and $arr[$arr.Count - 1] -eq '') { $arr.RemoveAt($arr.Count - 1) }
+    $from = [math]::Max(0, $arr.Count - $lines)
+    return ($arr.GetRange($from, $arr.Count - $from) -join "`n")
+}
+
 function Send-Json($response, [int]$code, [string]$json) {
     $buf = [System.Text.Encoding]::UTF8.GetBytes($json)
     $response.StatusCode = $code
@@ -269,6 +312,10 @@ function Send-Json($response, [int]$code, [string]$json) {
 
 while ($listener.IsListening) {
     $ctx = $listener.GetContext()
+    # 요청 하나에서 난 예외로 서버 프로세스가 끝나지 않게 루프 본문 전체를 try로 감싼다(아래 catch, 들여쓰기는 그대로 둠).
+    # 실측: 본문 없는 POST 한 번이면 응답 객체가 이미 닫혀 있어 끝의 404 설정에서 예외 → 서버 종료(게임 화면까지 멈춤).
+    # (본문을 덜 보내고 붙잡는 연결처럼 '멈춤'은 예외가 아니라서 이 try로 막히지 않는다 — 남은 과제)
+    try {
     $req = $ctx.Request
     $res = $ctx.Response
     $res.Headers.Add('Access-Control-Allow-Origin', '*')
@@ -283,6 +330,44 @@ while ($listener.IsListening) {
 
     if ($req.HttpMethod -eq 'GET' -and $req.Url.AbsolutePath -eq '/ping') {
         Send-Json $res 200 '{"ok":true}'
+        continue
+    }
+
+    # ===== 로그 읽기 (서명된 요청만) =====
+    # GET /logs?file=game|coach&tail=줄수(1~20000)&t=유닉스시각(ms)&sig=서명
+    # 서명 대상 글: "logs|{file}|{tail}|{t}". 평문 http라 주소를 엿볼 수 있으므로, 60초가 지났거나(미래 10초까지만 허용)
+    # 이미 받은 t로 온 요청은 거절한다. 서명 문자열은 같은 뜻의 다른 모양이 있을 수 있어(ECDSA) t로 막는다.
+    # 루프 전체를 감싼 바깥 try도 있지만, 이 블록은 403/500을 직접 돌려주려고 따로 감싼다.
+    if ($req.HttpMethod -eq 'GET' -and $req.Url.AbsolutePath -eq '/logs') {
+        try {
+            $lf = [string]$req.QueryString['file']
+            $lt = [string]$req.QueryString['tail']
+            $lts = [string]$req.QueryString['t']
+            $lsig = [string]$req.QueryString['sig']
+            $lpath = $null
+            if ($lf -eq 'game') { $lpath = $gameLogFile } elseif ($lf -eq 'coach') { $lpath = $logFile }
+            $ln = 0; $lms = [int64]0
+            $lnow = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+            $okReq = $lpath -and [int]::TryParse($lt, [ref]$ln) -and $ln -ge 1 -and $ln -le 20000 -and
+                     [int64]::TryParse($lts, [ref]$lms) -and ($lnow - $lms) -le 60000 -and ($lms - $lnow) -le 10000 -and
+                     -not $script:usedLogT.ContainsKey($lms)
+            if (-not $okReq -or -not (Test-LogSignature ("logs|$lf|$lt|$lts") $lsig)) {
+                Send-Json $res 403 '{"ok":false,"error":"서명이 없거나 맞지 않습니다"}'
+                continue
+            }
+            $script:usedLogT[$lms] = $lnow
+            foreach ($k in @($script:usedLogT.Keys)) { if ($lnow - $script:usedLogT[$k] -gt 120000) { $script:usedLogT.Remove($k) } }
+            $ltext = ''
+            if (Test-Path -LiteralPath $lpath) { $ltext = Read-LogTail $lpath $ln }
+            $lbuf = [System.Text.Encoding]::UTF8.GetBytes($ltext)
+            $res.StatusCode = 200
+            $res.ContentType = 'text/plain; charset=utf-8'
+            $res.ContentLength64 = $lbuf.Length
+            $res.OutputStream.Write($lbuf, 0, $lbuf.Length)
+            $res.Close()
+        } catch {
+            try { Send-Json $res 500 '{"ok":false,"error":"로그 읽기 실패"}' } catch {}
+        }
         continue
     }
 
@@ -324,12 +409,17 @@ while ($listener.IsListening) {
             $b = $rd.ReadToEnd() | ConvertFrom-Json
             # 게임이 보낸 '발생 시각'이 있으면 그걸 쓴다 (전송 지연에 순서가 흔들리지 않게)
             if ($b.text) {
+                # 인증 없는 주소라 한 줄 길이에 상한을 둔다 (정상 기록은 코치 답변을 포함해도 수천 자)
+                $gtext = [string]$b.text
+                if ($gtext.Length -gt 20000) { $gtext = $gtext.Substring(0, 20000) + ' …(잘림)' }
                 if ($b.t) {
+                    $gt = [string]$b.t
+                    if ($gt.Length -gt 40) { $gt = $gt.Substring(0, 40) }
                     [System.IO.File]::AppendAllText($gameLogFile,
-                        ([string]$b.t + '  ' + [string]$b.text + "`r`n"),
+                        ($gt + '  ' + $gtext + "`r`n"),
                         (New-Object System.Text.UTF8Encoding($false)))
                 } else {
-                    Write-GameLog ([string]$b.text)
+                    Write-GameLog $gtext
                 }
             }
         } catch {}
@@ -546,4 +636,9 @@ while ($listener.IsListening) {
 
     $res.StatusCode = 404
     $res.Close()
+    } catch {
+        Write-Host ("  ⚠ 요청 처리 오류 (서버는 계속 동작): " + $_.Exception.Message) -ForegroundColor Yellow
+        # 가능하면 500을 보낸다. Abort만 하면 클라이언트는 '200 빈 본문'을 받아 성공처럼 보였다(검증 실측)
+        try { Send-Json $ctx.Response 500 '{"ok":false,"error":"서버 오류"}' } catch { try { $ctx.Response.Abort() } catch {} }
+    }
 }
