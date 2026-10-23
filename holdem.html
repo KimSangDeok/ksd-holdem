@@ -1699,13 +1699,29 @@ function rangeEquity(iters){
   const cands = [];
   for(let i=0;i<deckI.length;i++) for(let j=i+1;j<deckI.length;j++) cands.push([deckI[i], deckI[j]]);
   const toCard = c => ({ r: c>>2, s: SUITS[c&3] });
-  const botBase = []; for(let r=2;r<=14;r++) for(let su=0;su<4;su++){ const c=r*4+su; if(!boardI.includes(c)) botBase.push(c); }
+  // 이번 판의 행동을 전부 반영한다. 예전엔 이번 스트리트 행동만 봐서, 플랍에서 상대가 아직 움직이지 않았으면
+  // 프리플랍 레이즈를 무시하고 무작위 상대로 계산했다(핸드 #1: 예송 딜러 레이즈 후 플랍 체크 차례에 '상대 읽기'가 없었다)
+  const N_AT = { flop:3, turn:4, river:5 };
+  // 지난 스트리트의 '봇이 본 승률'은 그 스트리트 보드로 계산하고, 판 안에서는 다시 쓴다(폰에서 매번 다시 세면 느리다)
+  if(!state.bvCache || state.bvCache.hand !== state.handNo) state.bvCache = { hand: state.handNo, m: {} };
+  const bvFor = (street, nOpp) => {
+    const key = street + '|' + nOpp;
+    let e = state.bvCache.m[key];
+    if(!e){
+      const bd = boardI.slice(0, N_AT[street]);
+      const base = []; for(let r=2;r<=14;r++) for(let su=0;su<4;su++){ const c=r*4+su; if(!bd.includes(c)) base.push(c); }
+      e = state.bvCache.m[key] = { bd, base, v: new Float64Array(64*64).fill(-1) };
+    }
+    return e;
+  };
   const models = [];   // {p, cum:Float64Array, total} 또는 null(무작위)
-  const by = [];
+  const by = [], reads = [];
+  const myNow = boardI.length >= 3 ? fastEval(Int32Array.from(myI.concat(boardI)), 2 + boardI.length) : null;
+  const STREET_KO = { preflop:'프리플랍', flop:'플랍', turn:'턴', river:'리버' };
+  const ACT_KO = { raise:'레이즈', call:'콜', check:'체크' };
   opps.forEach(p=>{
-    const acts = (p.acts||[]).filter(a => a.street === state.street);
+    const acts = p.acts || [];
     if(!acts.length){ models.push(null); return; }
-    const eqCache = {};
     const w = new Float64Array(cands.length);
     let total = 0;
     for(let k=0;k<cands.length;k++){
@@ -1715,10 +1731,9 @@ function rangeEquity(iters){
       for(const a of acts){
         let eqHc = 0;
         if(a.street !== 'preflop'){
-          const key = a.nOpp;
-          if(!eqCache[key]) eqCache[key] = new Float64Array(cands.length).fill(-1);
-          if(eqCache[key][k] < 0) eqCache[key][k] = _botViewEq(hc, boardI, a.nOpp, boardI.length===5 ? 120 : 60, botBase);
-          eqHc = eqCache[key][k];
+          const e = bvFor(a.street, a.nOpp), pk = hc[0]*64 + hc[1];
+          if(e.v[pk] < 0) e.v[pk] = _botViewEq(hc, e.bd, a.nOpp, e.bd.length===5 ? 120 : 60, e.base);
+          eqHc = e.v[pk];
         }
         wt *= botActProb(p, a, hcCards, eqHc);
         if(wt === 0) break;
@@ -1730,8 +1745,26 @@ function rangeEquity(iters){
     for(let k=0;k<cands.length;k++){ acc += w[k]; cum[k] = acc; }
     models.push({ cum, total: acc });
     by.push(p.name);
+    // 상대 읽기 요약: 이 행동들을 할 만한 패가 전체의 몇 %인지, 어떤 시작 패인지, 지금 보드에서 내 패보다 앞선 비율
+    const mix = { pair:0, ace:0, bw:0, other:0 };
+    let ahead = 0;
+    for(let k=0;k<cands.length;k++){
+      if(!w[k]) continue;
+      const r1 = cands[k][0]>>2, r2 = cands[k][1]>>2;
+      mix[r1===r2 ? 'pair' : (r1===14||r2===14) ? 'ace' : (r1>=10&&r2>=10) ? 'bw' : 'other'] += w[k];
+      if(myNow !== null){
+        const v = fastEval(Int32Array.from([cands[k][0], cands[k][1]].concat(boardI)), 2 + boardI.length);
+        ahead += w[k] * (v > myNow ? 1 : v === myNow ? 0.5 : 0);
+      }
+    }
+    const pc = x => Math.round(x / total * 100);
+    reads.push({ name: p.name,
+      acts: acts.map(a => STREET_KO[a.street] + ' ' + (ACT_KO[a.type] || a.type) + (a.type==='raise' && a.amt ? ' ' + a.amt.toLocaleString() : '')),
+      width: Math.round(total / cands.length * 1000) / 10,
+      mix: { pair: pc(mix.pair), ace: pc(mix.ace), bw: pc(mix.bw), other: pc(mix.other) },
+      ahead: myNow !== null ? pc(ahead) : null });
   });
-  if(!by.length) return null;                             // 이번 스트리트에 행동한 봇이 없음 → 무작위 승률과 같다
+  if(!by.length) return null;                             // 이번 판에 행동한 봇이 없음 → 무작위 승률과 같다
   const pick = m => { const x = rnd()*m.total; let lo=0, hi=m.cum.length-1;
     while(lo<hi){ const mid=(lo+hi)>>1; if(m.cum[mid] < x) lo=mid+1; else hi=mid; } return lo; };
   const nb = 5 - boardI.length;
@@ -1770,7 +1803,7 @@ function rangeEquity(iters){
     done++;
   }
   if(!done) return null;
-  return { pct: Math.round(score/done*100), by };
+  return { pct: Math.round(score/done*100), by, reads };
 }
 // 공개된 상대 패를 그대로 놓고 센 승률 (올인 후 카드를 깔 때). 남은 카드가 2장 이하면 전부 센다.
 function knownEquity(){
@@ -1812,7 +1845,7 @@ function callPrice(){
   players.forEach(p=>{ win += p.isHuman ? myFinal : Math.min(p.totalContrib, myFinal); });
   return { call, raw, allIn: raw >= me.stack, win, needExact: call/win*100 };
 }
-// 지금 결정에 쓸 내 승률: 이번 스트리트에 봇이 행동했으면 그 행동을 반영한 값, 아니면 무작위 기준 값
+// 지금 결정에 쓸 내 승률: 이번 판에 봇이 행동했으면 그 행동들을 반영한 값, 아니면 무작위 기준 값
 function decEqKey(){
   return state.handNo+'|'+state.street+'|'+state.currentBet+'|'+players.map(p=>(p.folded?'f':'')+(p.acts?p.acts.length:0)).join(',');
 }
@@ -1820,7 +1853,7 @@ function decisionEquity(){
   const key = decEqKey();
   if(state.decEq && state.decEq.key === key) return state.decEq;
   const r = rangeEquity(2500);
-  state.decEq = { key, pct: r ? r.pct : state.myEqPct, rand: state.myEqPct, by: r ? r.by : [] };
+  state.decEq = { key, pct: r ? r.pct : state.myEqPct, rand: state.myEqPct, by: r ? r.by : [], reads: r ? r.reads : [] };
   return state.decEq;
 }
 
@@ -2336,7 +2369,7 @@ function applyAction(p, type, target){
   }
   p.hasActed = true;
   if(!p.acts) p.acts = [];
-  p.acts.push(Object.assign(actCtx, { type: type }));
+  p.acts.push(Object.assign(actCtx, { type: type, amt: p.streetBet }));
   playActionSound(type, paid, p.allIn && paid > 0);
   p.lastAct = actLabel(p, type, p.streetBet);
   const line = p.name+': '+p.lastAct;
@@ -3103,7 +3136,7 @@ function localVerdict(act){
       L.push((winN >= needN ? '✅ 가격은 유리' : eq >= need - 2 ? '⚖️ 거의 본전' : '❌ 가격부터 손해')
         + ' — ' + (pr.allIn ? '올인 콜 ' : '콜 ') + pr.call.toLocaleString()+' 내면 '+pr.win.toLocaleString()+'을 두고 겨루는 판, '
         + '필요 승률 '+Math.round(need)+'% vs 내 승률 '+eq+'%'
-        + (de.by.length ? ' ('+de.by.join('·')+'의 이번 행동을 반영. 무작위 기준이면 '+de.rand+'%)' : ''));
+        + (de.by.length ? ' ('+de.by.join('·')+'의 이번 판 행동을 반영. 무작위 기준이면 '+de.rand+'%)' : ''));
     }
   }
 
@@ -3146,6 +3179,7 @@ const PRECOACH_FORMAT =
   '너는 "상대가 왜 그렇게 했는지"와 "그래서 뭘 해야 하는지"만 짧게 말해라.\n' +
   '★ 분량 엄수: 전체 120자 이내. 초과하면 실패한 답변이다.\n' +
   '아래 형식 그대로, 태그 밖의 말은 쓰지 마.\n' +
+  '상황 글에 "▶ 상대 읽기 (게임 계산)"이 있으면 [읽기]는 그 수치(그 행동을 하는 패의 비율·구성, 내 승률)를 근거로 쓴다. 수치를 지어내지 마.\n' +
   '[읽기]\n- 상대 행동의 의미 1줄 (성향 근거로)\n' +
   '[추천]\n결론: <지금 가장 좋은 행동 하나. 레이즈면 금액까지>';
 
@@ -3583,8 +3617,26 @@ function situationText(includePrompt){
         lines.push('지금 내 차례. '+(pr.allIn ? '올인 콜 — 실제로 내는 돈 '+pr.call+' (콜 금액 '+pr.raw+' 중 내 스택까지만)' : '콜 하려면 '+pr.call+' 필요')
           + '. 이기면 받는 돈 '+pr.win+', 본전 승률 '+Math.round(pr.needExact)+'%.');
         if(typeof de.pct === 'number')
-          lines.push('내 승률(게임 계산): '+(de.by.length ? de.by.join('·')+'의 이번 스트리트 행동을 봇 규칙으로 반영하면 '+de.pct+'% (무작위 상대 기준 '+de.rand+'%)' : '상대 무작위 기준 '+de.pct+'%'));
+          lines.push('내 승률(게임 계산): '+(de.by.length ? de.by.join('·')+'의 이번 판 행동을 봇 규칙으로 반영하면 '+de.pct+'% (무작위 상대 기준 '+de.rand+'%)' : '상대 무작위 기준 '+de.pct+'%'));
       } else lines.push('지금 내 차례. 체크 가능.');
+      // ▶ 상대 읽기 — 체크할 수 있는 차례에도 나온다(예전엔 콜 금액이 있을 때만 승률을 붙였다)
+      const dr = decisionEquity();
+      if(dr.reads && dr.reads.length){
+        lines.push('');
+        lines.push('▶ 상대 읽기 (게임 계산 — 봇의 실제 행동 규칙을 거꾸로 적용):');
+        dr.reads.forEach(r=>{
+          lines.push('  '+r.name+': '+r.acts.join(', ')+' → 이렇게 하는 패는 전체의 약 '+r.width+'%'
+            +' (포켓 페어 '+r.mix.pair+'% · A 포함 '+r.mix.ace+'% · 그림패 2장 '+r.mix.bw+'% · 그 밖 '+r.mix.other+'%)'
+            +(r.ahead !== null ? '. 지금 보드에서 내 패보다 앞선 패 '+r.ahead+'%' : ''));
+        });
+        if(!callPrice()) lines.push('  이 범위 기준 끝까지 갔을 때 내 승률 '+dr.pct+'% (상대를 무작위로 보면 '+dr.rand+'%)');
+      }
+    }
+    // 복사할 때는 게임 안 코치가 이번 차례에 미리 낸 분석(🔎 상대 읽기·결론)도 붙인다
+    if(includePrompt && typeof precoach !== 'undefined' && precoach && precoach.text && precoach.key === precoachKey()){
+      lines.push('');
+      lines.push('▶ 게임 안 코치의 사전 분석 (이번 차례, 참고):');
+      lines.push(precoach.text.trim());
     }
     if(includePrompt){
       lines.push('');
