@@ -164,21 +164,44 @@ function Get-CaBundleInfo {
         return [ordered]@{ certs = $col.Count; emSign = $em; emSignEccG3 = $g3 }
     } catch { return [ordered]@{ certs = $null; error = (Clear-OutText $_.Exception.Message); emSignEccG3 = $null } }
 }
-function Get-DpkgVersions([string[]]$names) {
-    $out = [ordered]@{}
-    foreach ($n in $names) { $out[$n] = $null }
-    if (-not (Test-Path -LiteralPath $script:dpkgStatusFile)) { return $out }
+# 설치된 패키지 전체(이름 → 판). 아키텍처가 여럿이면 함께 적는다
+function Get-DpkgInstalled {
+    $all = [ordered]@{}
+    if (-not (Test-Path -LiteralPath $script:dpkgStatusFile)) { return $all }
     foreach ($stanza in ([System.IO.File]::ReadAllText($script:dpkgStatusFile) -split "\n\s*\n")) {
         if ($stanza -notmatch '(?m)^Package: (\S+)\s*$') { continue }
         $pkg = $Matches[1]
-        if (-not $out.Contains($pkg)) { continue }
         if ($stanza -notmatch '(?m)^Status: \S+ ok installed\s*$') { continue }
         if ($stanza -notmatch '(?m)^Version: (\S+)\s*$') { continue }
         $v = $Matches[1]
         if ($stanza -match '(?m)^Architecture: (\S+)\s*$' -and $Matches[1] -ne 'all') { $v = "$v ($($Matches[1]))" }
-        $out[$pkg] = $(if ($out[$pkg]) { $out[$pkg] + ', ' + $v } else { $v })
+        $all[$pkg] = $(if ($all.Contains($pkg)) { $all[$pkg] + ', ' + $v } else { $v })
     }
+    return $all
+}
+function Get-DpkgVersions([string[]]$names, $all = $null) {
+    if ($null -eq $all) { $all = Get-DpkgInstalled }
+    $out = [ordered]@{}
+    foreach ($n in $names) { $out[$n] = $(if ($all.Contains($n)) { $all[$n] } else { $null }) }
     return $out
+}
+# 열려 있는 TCP 포트 (/proc/net/tcp·tcp6 의 LISTEN). 모든 주소에 열린 것(바깥에서 닿을 수 있음)과 이 서버 안에서만 열린 것을 나눈다
+function Get-ListeningPorts {
+    $pub = New-Object System.Collections.Generic.SortedSet[int]
+    $loc = New-Object System.Collections.Generic.SortedSet[int]
+    foreach ($f in @('/proc/net/tcp', '/proc/net/tcp6')) {
+        if (-not (Test-Path -LiteralPath $f)) { continue }
+        foreach ($line in ([System.IO.File]::ReadAllLines($f) | Select-Object -Skip 1)) {
+            $c = $line.Trim() -split '\s+'
+            if ($c.Count -lt 4 -or $c[3] -ne '0A') { continue }
+            $ipHex, $portHex = $c[1] -split ':'
+            $port = [Convert]::ToInt32($portHex, 16)
+            # 127.x.x.x(리틀 엔디언이라 끝 두 자리가 7F) 와 ::1 은 서버 안에서만 닿는다
+            $isLocal = ($ipHex.Length -eq 8 -and $ipHex.EndsWith('7F')) -or ($ipHex -eq '00000000000000000000000001000000')
+            if ($isLocal) { [void]$loc.Add($port) } else { [void]$pub.Add($port) }
+        }
+    }
+    return [ordered]@{ public = @($pub); localOnly = @($loc) }
 }
 function Get-ClaudeInstallKind {
     try {
@@ -323,7 +346,23 @@ function Get-SecurityInfo {
     $info.caProbe = $(if ($script:caProbe) { $script:caProbe } elseif ($script:caProbeJob) { '첫 코치 호출 진행 중' }
         elseif ($script:cliHelp -notmatch '--debug-file') { '이 claude 판은 --debug-file 미지원' } else { '아직 코치 호출 없음' })
     $info.caBundle = Get-CaBundleInfo
-    try { $info.packages = Get-DpkgVersions @('ca-certificates', 'libnss3', 'unattended-upgrades') } catch { $info.packages = '읽기 실패' }
+    $dp = $null
+    try { $dp = Get-DpkgInstalled } catch {}
+    try { $info.packages = Get-DpkgVersions @('ca-certificates', 'libnss3', 'unattended-upgrades') $dp } catch { $info.packages = '읽기 실패' }
+    # PHP·웹 서버 (2026-10 PHP2Shell 같은 웹 런타임 경보가 이 서버에 해당하는지 셸 없이 보려고)
+    try {
+        $web = [ordered]@{}
+        if ($dp) { foreach ($k in $dp.Keys) { if ($k -match '^(php[0-9.]*(-\S+)?|libapache2-mod-php\S*|apache2|nginx\S*|lighttpd|caddy)$') { $web[$k] = $dp[$k] } } }
+        $info.webPackages = $(if ($dp) { $web } else { '읽기 실패' })
+        $info.phpOnPath = [bool](Get-Command php -ErrorAction SilentlyContinue)
+        $procs = New-Object System.Collections.Generic.SortedSet[string]
+        foreach ($d in [System.IO.Directory]::GetDirectories('/proc')) {
+            if ((Split-Path -Leaf $d) -notmatch '^\d+$') { continue }
+            try { $n = ([System.IO.File]::ReadAllText("$d/comm")).Trim(); if ($n -match '^(php|apache2|httpd|nginx|lighttpd|caddy)') { [void]$procs.Add($n) } } catch {}
+        }
+        $info.webProcesses = @($procs)
+    } catch { $info.webPackages = '읽기 실패' }
+    try { $info.listeningTcp = Get-ListeningPorts } catch { $info.listeningTcp = '읽기 실패' }
     try {
         $au = '/etc/apt/apt.conf.d/20auto-upgrades'
         if (Test-Path -LiteralPath $au) {
