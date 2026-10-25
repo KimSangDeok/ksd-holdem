@@ -107,6 +107,235 @@ Write-Host ("  claude {0} / 시스템 프롬프트 파일 {1} / 도구 끄기 {2
     $(if ($script:canSystemPromptFile) { '지원' } else { '미지원 → 역할문을 메시지로 보냄' }),
     $(if ($script:canTools) { '지원' } else { '미지원' }))
 
+# ===== 인증 기관 키 유출(eMudhra, 2026-10) 대응 =====
+# claude 는 기본으로 '자기 안에 든 인증서 목록(번들)'과 '우분투 목록'을 함께 믿는다. 2.1.302 이하는 키가 유출된 emSign 루트를
+# 번들에 넣은 채 그대로 믿고(검증 실측: npm 2.1.260 바이너리 안에 인증서 원본), 2.1.303 부터 자체 거부 목록으로 막으며
+# 2.1.304 부터 번들에서도 뺐다. 이 서버는 claude 를 -p 로만 써서 자동 업데이트가 돌지 않았다(9월 판 그대로였음 — 자동 업데이트는 대화형 화면에만 있음).
+# 1) 임시 조치: 코치 호출은 우분투 목록만 믿게 한다(CLAUDE_CODE_CERT_STORE=system). 우분투 목록은 자동 보안 업데이트가 켜져 있으면
+#    매일 갱신되지만(ca-certificates 20260816ubuntu0.22.04.1 부터 G3 제외), 번들은 claude 를 올려야만 바뀐다.
+#    단, 우분투는 G3 하나만 뺐고 같은 회사의 G1·C1·C3 는 남았다 — claude 2.1.303 이상은 넷 다 막는다. 근본 해결은 업데이트다.
+#    2.1.260 도 이 설정을 알아듣고, 우분투 목록이 비었거나 못 읽으면 조용히 번들로 되돌아간다(바이너리 코드 확인) →
+#    켜진 뒤 첫 코치 호출 한 번만 디버그 기록을 남겨 실제로 읽은 목록을 /status 의 security.caProbe 로 보여 준다.
+#    서버 환경파일에 이미 값이 있으면 그 값을 따른다. NODE_USE_SYSTEM_CA=1 은 플래그가 있어야 우분투 목록을 읽는 실행 엔진 판을 위한 보험이다.
+# 2) 2.1.304 보다 낮으면 'claude update' 를 백그라운드로 한 번 돌린다. 업데이트 다운로드도 인증서로 보호되므로
+#    우분투 목록에서 G3 가 빠진 것을 확인한 뒤에만 시작한다(아니면 '대기' — /status 를 볼 때 다시 확인).
+#    (네이티브 설치판의 다운로드가 코치 호출과 같은 인증서 목록을 쓰는 것은 바이너리 코드로만 확인했다. npm 설치판은 npm 이 받는다)
+#    결과는 서명된 /status 의 security.claudeUpdate 에 나온다.
+$script:claudeCertStore = if ($env:CLAUDE_CODE_CERT_STORE) { $env:CLAUDE_CODE_CERT_STORE } else { 'system' }
+$script:claudeUseSystemCa = if ($env:NODE_USE_SYSTEM_CA) { $env:NODE_USE_SYSTEM_CA } else { '1' }
+$script:minSafeClaude = [version]'2.1.304'
+$script:claudeUpdateTimeoutSec = 300
+$script:caBundleFile = '/etc/ssl/certs/ca-certificates.crt'
+$script:dpkgStatusFile = '/var/lib/dpkg/status'
+$script:claudeUpdate = [ordered]@{ state = '안 함'; reason = ''; startedAt = $null; finishedAt = $null; exitCode = $null; output = ''; versionAfter = $null }
+$script:claudeUpdateJob = $null
+$script:caProbePending = $true
+# 점검 기록은 다른 계정이 못 읽는 전용 폴더에 둔다(권한 700). 지난번 실행이 거두기 전에 끝났으면 남은 파일을 지운다
+$script:caProbeDir = Join-Path $PSScriptRoot 'claude-probe'
+$script:caProbeFile = Join-Path $script:caProbeDir ('ca-probe-' + [guid]::NewGuid().ToString('N') + '.log')
+try {
+    if (-not (Test-Path -LiteralPath $script:caProbeDir)) { [void](New-Item -ItemType Directory -Path $script:caProbeDir) }
+    if (-not $IsWindows) { [System.IO.File]::SetUnixFileMode($script:caProbeDir, [System.IO.UnixFileMode]'UserRead, UserWrite, UserExecute') }
+    Get-ChildItem -LiteralPath $script:caProbeDir -Filter 'ca-probe-*.log' -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+} catch { $script:caProbePending = $false }
+$script:caProbeJob = $null
+$script:caProbe = $null
+
+# /status 로 내보내는 글: 색·커서 제어열과 제어·방향 문자를 지우고, 홈 폴더 이름을 가린다(평문 http 로 오감)
+function Clear-OutText([string]$t) {
+    $t = $t -replace '\x1b(\[[0-?]*[ -/]*[@-~]|\][^\x07\x1b]*(\x07|\x1b\\)|[()][0-9A-Za-z])', ''
+    $t = $t -replace '[\x00-\x08\x0b-\x1f\x7f-\x9f\u200e\u200f\u202a-\u202e\u2066-\u2069]', ' '
+    $t = $t -replace '/home/[^/\s''"]+', '/home/~' -replace '/root(?=/|\s|$)', '/~root'
+    return ($t -replace '\s+', ' ').Trim()
+}
+function Get-VersionNumber([string]$s) {
+    if ($s -notmatch '^\s*v?(\d+)\.(\d+)\.(\d+)') { return $null }
+    $v = $null
+    if ([version]::TryParse(('{0}.{1}.{2}' -f $Matches[1], $Matches[2], $Matches[3]), [ref]$v)) { return $v }
+    return $null
+}
+# 시스템 인증서 묶음 파일의 emSign 루트 (우분투는 /etc/ssl/certs 폴더도 같은 내용으로 맞춘다)
+function Get-CaBundleInfo {
+    try {
+        $col = [System.Security.Cryptography.X509Certificates.X509Certificate2Collection]::new()
+        $col.ImportFromPemFile($script:caBundleFile)
+        $em = @($col | Where-Object { $_.Subject -match 'emSign' } | ForEach-Object { $_.GetNameInfo([System.Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $false) })
+        $g3 = $(if ($col.Count -gt 0) { [bool]($em -contains 'emSign ECC Root CA - G3') } else { $null })   # 0개면 판정 불가
+        return [ordered]@{ certs = $col.Count; emSign = $em; emSignEccG3 = $g3 }
+    } catch { return [ordered]@{ certs = $null; error = (Clear-OutText $_.Exception.Message); emSignEccG3 = $null } }
+}
+function Get-DpkgVersions([string[]]$names) {
+    $out = [ordered]@{}
+    foreach ($n in $names) { $out[$n] = $null }
+    if (-not (Test-Path -LiteralPath $script:dpkgStatusFile)) { return $out }
+    foreach ($stanza in ([System.IO.File]::ReadAllText($script:dpkgStatusFile) -split "\n\s*\n")) {
+        if ($stanza -notmatch '(?m)^Package: (\S+)\s*$') { continue }
+        $pkg = $Matches[1]
+        if (-not $out.Contains($pkg)) { continue }
+        if ($stanza -notmatch '(?m)^Status: \S+ ok installed\s*$') { continue }
+        if ($stanza -notmatch '(?m)^Version: (\S+)\s*$') { continue }
+        $v = $Matches[1]
+        if ($stanza -match '(?m)^Architecture: (\S+)\s*$' -and $Matches[1] -ne 'all') { $v = "$v ($($Matches[1]))" }
+        $out[$pkg] = $(if ($out[$pkg]) { $out[$pkg] + ', ' + $v } else { $v })
+    }
+    return $out
+}
+function Get-ClaudeInstallKind {
+    try {
+        $lt = [System.IO.File]::ResolveLinkTarget($claudeExe, $true)
+        $p = $(if ($lt) { $lt.FullName } else { $claudeExe })
+        $kind = $(if ($p -match '/\.local/share/claude/versions/') { 'native' } elseif ($p -match 'node_modules') { 'npm' } else { 'other' })
+        return "$kind ($([System.IO.Path]::GetFileName($p)))"
+    } catch { return '?' }
+}
+function Start-ClaudeUpdateIfNeeded {
+    if ($script:claudeUpdateJob) { return }
+    if ($script:claudeUpdate.state -notin @('안 함', '대기', '건너뜀(다른 업데이트 진행 중)')) { return }
+    $cv = Get-VersionNumber $script:cliVersion
+    if (-not $cv) { $script:claudeUpdate.reason = '버전 확인 실패'; return }
+    if ($cv -ge $script:minSafeClaude) { $script:claudeUpdate.reason = "$cv 은 $($script:minSafeClaude) 이상"; return }
+    $ca = Get-CaBundleInfo
+    if ($ca.emSignEccG3 -ne $false) {
+        $script:claudeUpdate.state = '대기'
+        $script:claudeUpdate.reason = "$cv 이 $($script:minSafeClaude) 보다 낮지만, 우분투 인증서 목록에 아직 G3 가 있거나 확인 불가 — ca-certificates 갱신 뒤 진행"
+        return
+    }
+    $startedDt = Get-Date
+    try {
+    $job = Start-Job -ScriptBlock {
+        param($exe, $store, $useSys, $timeoutSec)
+        # 시간 제한이 있는 실행. 끝나지 않으면 프로세스 묶음째 끊는다
+        function Invoke-Timed([string]$file, [string[]]$argv, [int]$ms) {
+            $psi = New-Object System.Diagnostics.ProcessStartInfo
+            $psi.FileName = $file
+            foreach ($a in $argv) { $psi.ArgumentList.Add($a) }
+            $psi.UseShellExecute = $false
+            $psi.RedirectStandardInput = $true
+            $psi.RedirectStandardOutput = $true
+            $psi.RedirectStandardError = $true
+            $psi.EnvironmentVariables['CLAUDE_CODE_CERT_STORE'] = $store
+            $psi.EnvironmentVariables['NODE_USE_SYSTEM_CA'] = $useSys
+            $p = [System.Diagnostics.Process]::Start($psi)
+            $p.StandardInput.Close()
+            $o = $p.StandardOutput.ReadToEndAsync(); $e = $p.StandardError.ReadToEndAsync()
+            $to = -not $p.WaitForExit($ms)
+            if ($to) { try { $p.Kill($true) } catch {}; [void]$p.WaitForExit(5000) }
+            # 손자 프로세스가 출력 관을 쥐고 있으면 끝까지 못 읽는다 → 그때는 그 출력은 비운다(최대 5초씩만 기다림)
+            [pscustomobject]@{ timedOut = $to; exitCode = $(if ($to) { -1 } else { $p.ExitCode })
+                out = $(if ($o.Wait(5000)) { $o.Result } else { '' }); err = $(if ($e.Wait(5000)) { $e.Result } else { '' }) }
+        }
+        $u = Invoke-Timed $exe @('update') ($timeoutSec * 1000)
+        $v = Invoke-Timed $exe @('--version') 30000
+        $h = Invoke-Timed $exe @('--help') 30000
+        [pscustomobject]@{
+            exitCode = $u.exitCode; timedOut = $u.timedOut; output = ($u.out + ' ' + $u.err)
+            versionAfter = $(if (-not $v.timedOut) { $v.out.Trim() } else { '' })   # 버전·도움말은 표준 출력만 (경고가 섞이지 않게)
+            helpAfter = $(if (-not $h.timedOut) { $h.out } else { '' })
+            finishedAt = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss zzz')
+        }
+    } -ArgumentList $claudeExe, $script:claudeCertStore, $script:claudeUseSystemCa, $script:claudeUpdateTimeoutSec
+    } catch {
+        $script:claudeUpdate.state = '실패(작업 시작 실패)'
+        Add-ServerError ('claude 업데이트 작업 시작 실패: ' + $_.Exception.Message)
+        return
+    }
+    $script:claudeUpdateJob = $job
+    $script:claudeUpdateStartedDt = $startedDt
+    $script:claudeUpdate.state = '진행 중'
+    $script:claudeUpdate.reason = "$cv 이 $($script:minSafeClaude) 보다 낮음"
+    $script:claudeUpdate.startedAt = $startedDt.ToString('yyyy-MM-dd HH:mm:ss zzz')
+}
+try { Start-ClaudeUpdateIfNeeded } catch { Add-ServerError ('claude 업데이트 확인: ' + $_.Exception.Message) }
+Write-Host ("  코치 호출 인증서 목록: {0} / claude 업데이트: {1} ({2})" -f $script:claudeCertStore, $script:claudeUpdate.state, $script:claudeUpdate.reason)
+
+# 업데이트 작업이 끝났으면 결과를 거둬 상태에 반영한다 (요청이 올 때마다 확인 — 끝나기 전에는 아무것도 안 함)
+function Update-ClaudeUpdateState {
+    $j = $script:claudeUpdateJob
+    if (-not $j) { return }
+    if ($j.State -eq 'Running') {
+        # 작업 자체가 응답하지 않을 때의 마지막 안전장치 (안쪽 제한 + 여유)
+        if (((Get-Date) - $script:claudeUpdateStartedDt).TotalSeconds -le $script:claudeUpdateTimeoutSec + 120) { return }
+        Stop-Job $j -ErrorAction SilentlyContinue
+    }
+    $script:claudeUpdateJob = $null
+    $r = $null
+    try { $r = Receive-Job $j -ErrorAction SilentlyContinue | Select-Object -Last 1 } catch {}
+    Remove-Job $j -Force -ErrorAction SilentlyContinue
+    if (-not $r) {
+        $script:claudeUpdate.finishedAt = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss zzz')
+        $script:claudeUpdate.state = '실패(작업 응답 없음)'
+        Add-ServerError 'claude 업데이트 실패(작업 응답 없음)'
+        return
+    }
+    # 색·커서 제어열과 제어 문자를 지우고 끝부분 400자만 남긴다 (오류 문장은 보통 끝에 있다)
+    $o = Clear-OutText ([string]$r.output)
+    if ($o.Length -gt 400) { $o = '…' + $o.Substring($o.Length - 400) }
+    $script:claudeUpdate.output = $o
+    $script:claudeUpdate.finishedAt = [string]$r.finishedAt
+    $script:claudeUpdate.exitCode = $r.exitCode
+    $script:claudeUpdate.versionAfter = [string]$r.versionAfter
+    $after = Get-VersionNumber ([string]$r.versionAfter)
+    if ($after) { $script:cliVersion = [string]$r.versionAfter }
+    else { Add-ServerError 'claude 업데이트 뒤 버전 확인 실패 — 실행 파일 상태를 직접 확인 필요' }
+    if ($r.helpAfter) {
+        $script:cliHelp = [string]$r.helpAfter
+        $script:canSystemPromptFile = [bool]($script:cliHelp -match '--system-prompt-file')
+        $script:canTools = [bool]($script:cliHelp -match '--tools')
+    }
+    if ($after -and $after -ge $script:minSafeClaude) { $script:claudeUpdate.state = '완료' }
+    elseif ($r.timedOut) { $script:claudeUpdate.state = "실패(시간 초과 $($script:claudeUpdateTimeoutSec)초)" }
+    elseif ($o -match 'Another Claude process|currently installing') { $script:claudeUpdate.state = '건너뜀(다른 업데이트 진행 중)' }   # /status 볼 때 다시 시도
+    else { $script:claudeUpdate.state = "실패(종료 코드 $($r.exitCode))" }
+    if ($script:claudeUpdate.state -ne '완료') { Add-ServerError ('claude 업데이트 ' + $script:claudeUpdate.state + ' (자세한 내용: /status security.claudeUpdate)') }
+    Write-Host ("  claude 업데이트 {0}: {1}" -f $script:claudeUpdate.state, $script:cliVersion)
+}
+
+# 첫 코치 호출의 디버그 기록에서 인증서 목록 줄만 뽑고 기록 파일은 지운다 (질문 내용 등 다른 줄은 남기지 않음)
+function Update-CaProbe {
+    $j = $script:caProbeJob
+    if (-not $j -or $j.State -eq 'Running') { return }
+    $script:caProbeJob = $null
+    $lines = @()
+    try {
+        if (Test-Path -LiteralPath $script:caProbeFile) {
+            $lines = @([System.IO.File]::ReadAllLines($script:caProbeFile) | Where-Object { $_ -match 'CA certs:' -and $_ -notmatch 'Config fallback' } |
+                ForEach-Object { $s = Clear-OutText ($_ -replace '^.*?CA certs:', 'CA certs:'); if ($s.Length -gt 160) { $s.Substring(0, 160) } else { $s } } | Select-Object -First 12)
+        }
+    } catch {}
+    try { Remove-Item -LiteralPath $script:caProbeFile -Force -ErrorAction SilentlyContinue } catch {}
+    $script:caProbe = [ordered]@{ at = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss zzz'); lines = $lines }
+}
+
+# 서버 보안 점검 (서명된 /status 의 security). 서버 셸에 들어가지 않고 확인하려고 만든 읽기 전용 정보다.
+# 파일만 읽고 다른 프로그램을 기다리지 않는다(루프가 멈추지 않게 — 업데이트 대기 중이면 작업만 백그라운드로 띄움).
+# 응답은 평문 http 로 오가므로 사용자 이름·홈 폴더 이름은 넣지 않는다.
+function Get-SecurityInfo {
+    $info = [ordered]@{}
+    # 기다리던 중이면 다시 확인한다: 그사이 우분투 목록이 갱신됐으면 업데이트 작업을 백그라운드로 시작한다
+    if ($script:claudeUpdate.state -in @('대기', '건너뜀(다른 업데이트 진행 중)')) {
+        try { Start-ClaudeUpdateIfNeeded } catch { Add-ServerError ('claude 업데이트 확인: ' + $_.Exception.Message) }
+    }
+    try { $info.runAsRoot = ([Environment]::UserName -eq 'root') } catch { $info.runAsRoot = $null }
+    $info.claudeInstall = Get-ClaudeInstallKind
+    $info.claudeHasOwnBlocklist = [bool]((Get-VersionNumber $script:cliVersion) -ge [version]'2.1.303')
+    $info.claudeCertStore = $script:claudeCertStore
+    $info.claudeUpdate = $script:claudeUpdate
+    $info.caProbe = $(if ($script:caProbe) { $script:caProbe } elseif ($script:caProbeJob) { '첫 코치 호출 진행 중' }
+        elseif ($script:cliHelp -notmatch '--debug-file') { '이 claude 판은 --debug-file 미지원' } else { '아직 코치 호출 없음' })
+    $info.caBundle = Get-CaBundleInfo
+    try { $info.packages = Get-DpkgVersions @('ca-certificates', 'libnss3', 'unattended-upgrades') } catch { $info.packages = '읽기 실패' }
+    try {
+        $au = '/etc/apt/apt.conf.d/20auto-upgrades'
+        if (Test-Path -LiteralPath $au) {
+            $al = @([System.IO.File]::ReadAllLines($au) | Where-Object { $_ -match '^\s*APT::Periodic' } | ForEach-Object { $_.Trim() })
+            $info.autoUpgrades = $(if ($al.Count) { ,$al } else { '(APT::Periodic 설정 없음)' })
+        } else { $info.autoUpgrades = '(파일 없음)' }
+    } catch { $info.autoUpgrades = '읽기 실패' }
+    try { $info.java = [bool](Get-Command java -ErrorAction SilentlyContinue); $info.javaCacerts = (Test-Path -LiteralPath '/etc/ssl/certs/java/cacerts') } catch { $info.java = $null }
+    try { $info.ociAgentSnap = (Test-Path -LiteralPath '/snap/oracle-cloud-agent') } catch { $info.ociAgentSnap = $null }
+    return $info
+}
+
 # 코치 역할문(PRIME_TEXT)은 게임 화면이 /chat 마다 함께 보내고, 서버가 파일로 두어
 # claude 의 시스템 프롬프트(--system-prompt-file)로 매 호출에 고정한다.
 # 이전에는 첫 호출 메시지 앞에만 붙여서, 서버가 세션을 새로 열면(20회마다·노트 저장 뒤)
@@ -168,12 +397,16 @@ function Add-SessionPrefix([string]$message, [string]$kind) {
 
 function Start-ClaudeJob([string]$message, [string]$resumeId, [string]$model, [bool]$fast, [bool]$useSystemPrompt = $true) {
     if (-not $model) { $model = $coachModel }
+    $certStore = $script:claudeCertStore
+    $useSysCa = $script:claudeUseSystemCa
+    $probeFile = $null
+    if ($script:caProbePending -and $script:cliHelp -match '--debug-file') { $script:caProbePending = $false; $probeFile = $script:caProbeFile }
     # 코칭 노트 작성(kind=profile)은 긴 마크다운을 내야 하므로 '250자 이내' 같은 코치 말투 규칙을 걸지 않는다.
     $sysFile = $null
     if ($useSystemPrompt -and $script:canSystemPromptFile -and $script:primeText) { $sysFile = $primeFile }
     $noTools = $script:canTools
-    Start-Job -ScriptBlock {
-        param($msg, $resume, $mdl, $exe, $fastMode, $sysFile, $noTools)
+    $job = Start-Job -ScriptBlock {
+        param($msg, $resume, $mdl, $exe, $fastMode, $sysFile, $noTools, $certStore, $useSysCa, $probeFile)
         $psi = New-Object System.Diagnostics.ProcessStartInfo
         $psi.FileName = $exe
         # 인자는 한 줄 문자열이 아니라 목록으로 넘긴다. 빈 문자열("")이나 공백이 든 경로도 그대로 전달된다.
@@ -196,6 +429,10 @@ function Start-ClaudeJob([string]$message, [string]$resumeId, [string]$model, [b
         # 답 전에 길게 생각할 이유가 없다 → 생각 예산만 줄인다 (모델은 그대로).
         # 최종 평가·핸드 리뷰·코칭 노트에는 적용하지 않는다.
         if ($fastMode) { $psi.EnvironmentVariables['MAX_THINKING_TOKENS'] = '0' }
+        # 우분투 인증서 목록만 믿게 한다 (위 '인증 기관 키 유출 대응' 참고)
+        if ($certStore) { $psi.EnvironmentVariables['CLAUDE_CODE_CERT_STORE'] = $certStore }
+        if ($useSysCa) { $psi.EnvironmentVariables['NODE_USE_SYSTEM_CA'] = $useSysCa }
+        if ($probeFile) { $psi.ArgumentList.Add('--debug-file'); $psi.ArgumentList.Add($probeFile) }
         $proc = [System.Diagnostics.Process]::Start($psi)
         $bytes = [System.Text.Encoding]::UTF8.GetBytes($msg)
         $proc.StandardInput.BaseStream.Write($bytes, 0, $bytes.Length)
@@ -207,7 +444,9 @@ function Start-ClaudeJob([string]$message, [string]$resumeId, [string]$model, [b
         $t = $stdout.Trim()
         if ($t) { return $t }
         return 'ERR:' + $stderr
-    } -ArgumentList $message, $resumeId, $model, $claudeExe, $fast, $sysFile, $noTools
+    } -ArgumentList $message, $resumeId, $model, $claudeExe, $fast, $sysFile, $noTools, $certStore, $useSysCa, $probeFile
+    if ($probeFile) { $script:caProbeJob = $job }
+    return $job
 }
 
 function New-ClaudeTicket([string]$rawMsg, [string]$kind, [string]$model, [bool]$fast) {
@@ -396,6 +635,8 @@ while ($listener.IsListening) {
     # 실측: 본문 없는 POST 한 번이면 응답 객체가 이미 닫혀 있어 끝의 404 설정에서 예외 → 서버 종료(게임 화면까지 멈춤).
     # 본문을 덜 보내고 붙잡는 연결처럼 '멈춤'은 예외가 아니라서 이 try로는 못 막는다 → Read-Body의 시간 제한과 아래 KeepAlive로 막는다.
     try {
+    # 백그라운드 작업 결과 거두기 — 여기서 난 오류가 요청 처리를 막지 않게 따로 감싼다
+    try { Update-ClaudeUpdateState; Update-CaProbe } catch { Add-ServerError ('작업 결과 거두기: ' + $_.Exception.Message) }
     $req = $ctx.Request
     $res = $ctx.Response
     $res.Headers.Add('Access-Control-Allow-Origin', '*')
@@ -483,8 +724,9 @@ while ($listener.IsListening) {
                 jobs = [ordered]@{ total = $script:jobs.Count; running = $running }
                 fileBytes = [ordered]@{ gameLog = (& $size $gameLogFile); coachLog = (& $size $logFile); coachingNote = (& $size $profileFile) }
                 recentErrors = @($script:recentErrors.ToArray())
+                security = (Get-SecurityInfo)
             }
-            Send-Json $res 200 ($st | ConvertTo-Json -Depth 4 -Compress)
+            Send-Json $res 200 ($st | ConvertTo-Json -Depth 5 -Compress)
         } catch {
             Add-ServerError ('/status: ' + $_.Exception.Message)
             try { Send-Json $res 500 '{"ok":false,"error":"상태 조회 실패"}' } catch {}
