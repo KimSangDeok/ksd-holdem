@@ -23,7 +23,7 @@ Claude가 이 프로젝트를 수정할 때 **매번 반드시 지켜야 할 규
 - **코치 없이 열렸을 때**: "서버 꺼짐" 표시만 뜨고 게임·봇·즉시 판정·승률·음성은 그대로 동작하는 것이 정상이다. 이 동작을 깨뜨리지 말 것.
 - **서버 읽기 전용 창구**: `./server.sh` — 서명한 요청만 서버가 받는다. 서버에는 공개 키만 있다(coach-server.ps1 상수).
   - `./server.sh logs [game|coach] [끝에서 몇 줄]` — 게임 타임라인 / 코치 호출 기록 (`./read-logs.sh`도 같음)
-  - `./server.sh status` — 켜진 시간, 실제로 돌고 있는 파일 버전(배포 반영 확인), 최근 서버 오류, 보안 점검(`security`: claude 판·설치 방식·업데이트 결과, 켜진 뒤 첫 코치 호출이 실제로 읽은 인증서 목록(`caProbe`), 시스템 인증서 목록의 emSign 루트, ca-certificates·libnss3 판, 자동 보안 업데이트 설정, Java 유무)
+  - `./server.sh status` — 켜진 시간, 실제로 돌고 있는 파일 버전(배포 반영 확인), 최근 서버 오류, 보안 점검(`security`: claude 판·설치 방식·업데이트 결과, 켜진 뒤 첫 코치 호출이 실제로 읽은 인증서 목록(`caProbe`), 시스템 인증서 목록의 emSign 루트, ca-certificates·libnss3 판, 자동 보안 업데이트 설정, Java 유무, PHP·웹 서버 패키지와 실행 여부, 열린 TCP 포트(바깥/서버 안))
   - `./server.sh db get <ns> <key>` / `./server.sh db log <ns> <log> [개수]` — 기록 서버 읽기 (쓰기는 열지 않음)
   - 개인 키는 Claude 작업 환경 변수 `HOLDEM_LOG_KEY`에, 서버 주소는 `HOLDEM_SERVER`에 둔다. 둘 다 저장소에 넣지 않는다(규칙 9).
   - 클라우드 세션에서 서버에 닿으려면 작업 환경의 허용된 도메인에 서버 이름이 있어야 한다. IP는 입력이 안 되므로 `<IP의 점을 -로>.sslip.io`를 쓴다.
